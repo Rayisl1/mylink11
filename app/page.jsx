@@ -791,117 +791,44 @@ function EmployerTable() {
     </div>
   );
 }
-function AddJobModal({ open, onClose, onAdd }) {
-  const [title, setTitle] = useState("");
-  const [city, setCity] = useState("");
-  const [exp, setExp] = useState("");
-  const [format, setFormat] = useState("");
-  const [salary, setSalary] = useState("");
-  const [dutiesText, setDutiesText] = useState("");
-  const [reqsText, setReqsText] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = "auto"; };
-  }, [open]);
-
-  if (!open) return null;
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!title.trim() || !city.trim()) {
-      setError("Заполните обязательные поля");
-      return;
-    }
-    onAdd({
-      id: "job_" + Date.now(),
-      title,
-      city,
-      exp,
-      format,
-      salary,
-      duties: dutiesText,
-      requirements: reqsText,
-    });
-    onClose();
-  };
-
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.5)",
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1000,
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: "16px",
-          padding: "24px",
-          width: "min(700px, 90%)",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ fontSize: "20px", fontWeight: "600", margin: 0 }}>Добавить вакансию</h2>
-          <button onClick={onClose} style={{ fontSize: "22px", border: "none", background: "transparent", cursor: "pointer" }}>×</button>
-        </div>
-
-        <form onSubmit={submit} style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <label>
-              <div>Профессия / Должность*</div>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} className="input" placeholder="Frontend Developer" />
-            </label>
-            <label>
-              <div>Город*</div>
-              <input value={city} onChange={(e) => setCity(e.target.value)} className="input" placeholder="Алматы" />
-            </label>
-            <label>
-              <div>Стаж / Опыт</div>
-              <input value={exp} onChange={(e) => setExp(e.target.value)} className="input" placeholder="от 2 лет / Middle" />
-            </label>
-            <label>
-              <div>График / Формат</div>
-              <input value={format} onChange={(e) => setFormat(e.target.value)} className="input" placeholder="Полный день / Гибрид / Remote" />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              <div>Зарплата</div>
-              <input value={salary} onChange={(e) => setSalary(e.target.value)} className="input" placeholder="до 900 000 ₸" />
-            </label>
-          </div>
-
-          <label>
-            <div>Обязанности (каждая строка — отдельный пункт)</div>
-            <textarea rows="3" value={dutiesText} onChange={(e) => setDutiesText(e.target.value)} className="input" placeholder="коммуникация с клиентами&#10;отчётность в CRM&#10;совместная работа с командой" />
-          </label>
-
-          <label>
-            <div>Требования (каждая строка — отдельный пункт)</div>
-            <textarea rows="3" value={reqsText} onChange={(e) => setReqsText(e.target.value)} className="input" placeholder="дисциплина&#10;обучаемость&#10;ответственность" />
-          </label>
-
-          {error && <div style={{ color: "red", fontSize: "14px" }}>{error}</div>}
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-            <button type="button" onClick={onClose} className="btn btn-outline">Отмена</button>
-            <button type="submit" className="btn btn-primary">Сохранить</button>
-          </div>
-        </form>
-      </div>
+<div className="auth-backdrop" role="dialog" aria-modal="true">
+  {/* было: <div className="auth-modal" style={{width:"min(820px,96vw)"}}> */}
+  <div className="auth-modal modal-lg">
+    <div className="auth-head">
+      <div style={{fontWeight:600}}>Добавить вакансию</div>
+      <button className="auth-close" onClick={onClose}>×</button>
     </div>
-  );
-}
+
+    {/* форма без inline-стилей — только классы .field / .grid */}
+    <form className="auth-body" onSubmit={submit}>
+      <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+        <div className="field"><label>Профессия / Должность*</label><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Frontend Developer"/></div>
+        <div className="field"><label>Город*</label><input value={city} onChange={e=>setCity(e.target.value)} placeholder="Алматы"/></div>
+        <div className="field"><label>Стаж / Требуемый опыт</label><input value={exp} onChange={e=>setExp(e.target.value)} placeholder="от 2 лет / Middle"/></div>
+        <div className="field"><label>График / Формат</label><input value={format} onChange={e=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote"/></div>
+        <div className="field" style={{gridColumn:"1 / -1"}}><label>Зарплата</label><input value={salary} onChange={e=>setSalary(e.target.value)} placeholder="до 900 000 ₸"/></div>
+      </div>
+
+      <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+        <div className="field">
+          <label>Обязанности (каждая строка — отдельный пункт)</label>
+          <textarea rows={6} value={duties} onChange={e=>setDuties(e.target.value)} placeholder={"коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой"}/>
+        </div>
+        <div className="field">
+          <label>Требования (списком)</label>
+          <textarea rows={6} value={reqs} onChange={e=>setReqs(e.target.value)} placeholder={"дисциплина\nобучаемость\nответственность"}/>
+        </div>
+      </div>
+
+      {error && <div className="auth-error">{error}</div>}
+      <div className="auth-footer">
+        <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
+        <button type="submit" className="btn btn-primary">Сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 
 
 /* ========= СТРАНИЦА ========= */
