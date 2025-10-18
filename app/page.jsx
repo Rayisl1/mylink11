@@ -491,7 +491,7 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= SMARTBOT (автоформула + поддержка candidate) ========= */
+/* ========= SMARTBOT (автоформула + Gemini API при диалоге) ========= */
 function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:"..."}
   const [replying, setReplying] = useState(false);
@@ -507,8 +507,8 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
     setFinalScore(null);
 
-    // Если модалка открыта для конкретного кандидата — сразу считаем авто-оценку и сохраняем
     if (candidate) {
+      // режим работодателя: авто-оценка на фронте
       const score = computeAutoScore(candidate, job);
       setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
       setSignals({
@@ -521,8 +521,8 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       return;
     }
 
-    // Иначе — интерактивный сценарий (если решишь подключить API позже)
-    // askGemini([]); // закомментировано, т.к. сейчас используем автоформулу для работодателя
+    // режим соискателя: включаем Gemini API
+    askGemini([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id, candidate?.id]);
 
@@ -536,7 +536,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     const m = String(text).match(/(\d+(\.\d+)?)/);
     return m ? Number(m[1]) : 0;
   }
-
   function scoreKeywordMatch(candidate, job) {
     const jt = (job.title || "").toLowerCase();
     const pf = (candidate.profession || "").toLowerCase();
@@ -549,17 +548,10 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     s += Math.min(30, matches * 6);
     return s;
   }
-
   function computeAutoScore(candidate, job) {
     let score = 50;
-
-    // Город
     if (candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase()) score += 15;
-
-    // Профессия / ключевые слова
     score += scoreKeywordMatch(candidate, job);
-
-    // Опыт
     const candYears = parseYears(candidate.experience);
     let requiredYears = 0;
     if (job.exp) {
@@ -574,14 +566,11 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       if (candYears >= requiredYears) score += 15;
       else score -= Math.min(20, (requiredYears - candYears) * 6);
     }
-
-    // Формат (если у кандидата указаны пожелания по формату)
     if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
-
     return Math.round(Math.max(0, Math.min(100, score)));
   }
 
-  // Сохраняем запись для таблицы работодателя
+  // Сохранение результата (и для автоформулы, и для Gemini)
   function saveApplication(score, candidateParam = null) {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
     const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
@@ -589,7 +578,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       ? candidateParam.name
       : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
     const candidateEmail = candidateParam?.email || currentUser?.email || "";
-
     all.push({
       name: candidateName,
       email: candidateEmail,
@@ -603,12 +591,63 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
-  // Заглушка под диалог с ассистентом, если вернёшься к API позже
+  // =========== Gemini API ===========
+  async function askGemini(history) {
+    setReplying(true);
+    try {
+      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
+      const profile = u ? {
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+        city: "", experience: "", profession: "", preferredFormat: ""
+      } : {};
+
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          history,
+          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
+          profile
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setMessages((arr)=>[...arr, { role:"assistant", content:"Извините, сервер ассистента недоступен." }]);
+        setReplying(false);
+        return;
+      }
+
+      // текст бота
+      setMessages((arr)=>[...arr, { role:"assistant", content: data.reply }]);
+
+      // обновляем извлечённые сигналы
+      setSignals((prev) => ({
+        city: data.signals?.city || prev.city,
+        exp: data.signals?.exp || prev.exp,
+        format: data.signals?.format || prev.format,
+      }));
+
+      // финал — записываем оценку
+      if (typeof data.final_score === "number" && data.next_action === "finish") {
+        setFinalScore(data.final_score);
+        saveApplication(data.final_score);
+        setMessages((arr)=>[...arr, { role:"assistant", content:`Итоговая релевантность: ${data.final_score}%` }]);
+      }
+    } catch {
+      setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
+    } finally {
+      setReplying(false);
+    }
+  }
+
   const sendUser = (text) => {
     const v = (text || "").trim();
     if (!v || replying) return;
     setMessages((arr)=>[...arr, { role:"user", content:v }]);
-    // Здесь можно вызвать askGemini([...])
+    const hist = [...messages, { role: "user", content: v }]
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role, content: m.content }));
+    askGemini(hist);
   };
 
   if (!open) return null;
@@ -621,7 +660,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
-          {/* Инфо о вакансии */}
           <div className="card" style={{marginBottom:12}}>
             <div className="title" style={{marginBottom:6}}>{job.title}</div>
             <div className="meta">
@@ -635,7 +673,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
             </div>
           </div>
 
-          {/* Сообщения */}
           <div className="sb-messages" ref={listRef}>
             {messages.map((m, i) => (
               <div
@@ -647,7 +684,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
             {replying && !candidate && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
           </div>
 
-          {/* Ввод — скрываем, если это автоматическая оценка кандидата */}
+          {/* Ввод — скрываем в режиме авто-оценки работодателя */}
           {!candidate && (
             <div className="sb-input">
               <input
@@ -680,7 +717,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
         </div>
       </div>
 
-      {/* стили те же */}
       <style jsx global>{`
         .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
         .sb-modal{width:min(760px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
@@ -694,16 +730,17 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
         .sb-bot{background:#f1f5f9;align-self:flex-start}[data-theme="dark"] .sb-bot{background:#122033}
         .sb-user{background:#dbeafe;align-self:flex-end}[data-theme="dark"] .sb-user{background:#1d3a6a}
         .sb-input{display:flex;gap:8px;margin-top:12px}
-        .sb-input input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:var(--text)}
+        .sb-input input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:#fff0}
         .sb-input button{padding:10px 12px;border-radius:12px;border:none;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
       `}</style>
     </div>
   );
 }
 
-/* ========= ТАБЛИЦА ОТКЛИКОВ ========= */
+/* ========= ТАБЛИЦА ОТКЛИКОВ (обновить/очистить/скачать PDF) ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
+
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
       .slice()
@@ -711,30 +748,99 @@ function EmployerTable() {
     setRows(data);
   };
   useEffect(()=>{ load(); }, []);
+
   const tone = (s)=> (s>=80?"b-good":s>=60?"b-warn":"b-bad");
+
+  const clearAll = () => {
+    if (!confirm("Очистить все результаты SmartBot?")) return;
+    localStorage.removeItem("smartbot_candidates");
+    setRows([]);
+  };
+
+  const exportPDF = () => {
+    const html = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Отчёт SmartBot</title>
+<style>
+  body{font-family:Arial, sans-serif; padding:24px; color:#111;}
+  h1{margin:0 0 16px 0; font-size:20px}
+  table{border-collapse:collapse; width:100%}
+  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
+  th{background:#f3f4f6}
+  .right{text-align:right}
+</style>
+</head>
+<body>
+  <h1>Отчёт SmartBot — релевантность кандидатов</h1>
+  <div style="font-size:12px;margin-bottom:10px;color:#555">
+    Сформировано: ${new Date().toLocaleString()}
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Имя</th>
+        <th>Email</th>
+        <th>Вакансия</th>
+        <th class="right">Релевантность</th>
+        <th>Город</th>
+        <th>Опыт</th>
+        <th>Дата</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(r=>`
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.email||"-")}</td>
+          <td>${esc(r.jobTitle||"")}</td>
+          <td class="right">${Number(r.score)||0}%</td>
+          <td>${esc(r.city||"-")}</td>
+          <td>${esc(r.exp||"-")}</td>
+          <td>${new Date(r.date).toLocaleString()}</td>
+        </tr>`).join("")}
+    </tbody>
+  </table>
+  <script>window.print();</script>
+</body>
+</html>`;
+    const w = window.open("", "_blank");
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
   return (
     <div className="card">
+      <div style={{display:"flex", gap:8, marginBottom:12, flexWrap:"wrap"}}>
+        <button className="btn btn-outline" onClick={load}>Обновить</button>
+        <button className="btn btn-outline" onClick={clearAll}>Очистить</button>
+        <button className="btn btn-primary" onClick={exportPDF}>Скачать PDF</button>
+      </div>
+
       <div style={{ overflow: "auto" }}>
         <table className="table">
           <thead><tr><th>Имя</th><th>Email</th><th>Вакансия</th><th>Релевантность</th><th>Индикатор</th><th>Дата</th></tr></thead>
-        <tbody>
-          {!rows.length ? (
-            <tr><td colSpan={6} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
-          ) : rows.map((r,i)=>(
-            <tr key={i}>
-              <td>{esc(r.name)}</td>
-              <td>{esc(r.email||"-")}</td>
-              <td>{esc(r.jobTitle||"")}</td>
-              <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
-              <td>
-                <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
-                  <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
-                </div>
-              </td>
-              <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
-            </tr>
-          ))}
-        </tbody>
+          <tbody>
+            {!rows.length ? (
+              <tr><td colSpan={6} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
+            ) : rows.map((r,i)=>(
+              <tr key={i}>
+                <td>{esc(r.name)}</td>
+                <td>{esc(r.email||"-")}</td>
+                <td>{esc(r.jobTitle||"")}</td>
+                <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
+                <td>
+                  <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
+                    <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
+                  </div>
+                </td>
+                <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
     </div>
@@ -788,7 +894,6 @@ export default function Page() {
     localStorage.setItem("theme", next);
   };
 
-  const openSmartBot = (j) => { setJob(j); setModalOpen(true); };
   const logout = () => { localStorage.removeItem("jb_current"); setUser(null); setView("jobs"); };
 
   // поиск
@@ -935,7 +1040,7 @@ export default function Page() {
                         Предпросмотр
                       </button>
 
-                      {/* НОВОЕ: кнопка авто-оценки SmartBot для работодателя */}
+                      {/* Кнопка авто-оценки SmartBot для работодателя */}
                       {user?.role === "employer" && (
                         <button
                           className="btn btn-outline"
@@ -996,7 +1101,7 @@ export default function Page() {
         html,body{margin:0;height:100%}
         body{font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
         a{text-decoration:none;color:inherit}
-        .container{max-width:1100px;margin:0 auto;padding:24px}
+        .container{max-width:1100px;margin:0 авто;padding:24px}
         .header{position:sticky;top:0;z-index:10;backdrop-filter:saturate(1.3) blur(6px);background:rgba(255,255,255,.85);border-bottom:1px solid var(--line)}
         [data-theme="dark"] .header{background:rgba(15,23,42,.8)}
         .header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:12px 24px}
