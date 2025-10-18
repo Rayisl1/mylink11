@@ -83,7 +83,7 @@ function AuthModal({ open, onClose, onAuth }) {
 
   return (
     <div className="auth-backdrop" role="dialog" aria-modal="true">
-      <div className="auth-modal modal-lg">
+      <div className="auth-modal">
         <div className="auth-head">
           <div className="auth-tabs">
             <button className={clsx("auth-tab", mode === "login" && "active")} onClick={() => setMode("login")}>Вход</button>
@@ -135,6 +135,115 @@ function AuthModal({ open, onClose, onAuth }) {
     </div>
   );
 }
+/* ========= МОДАЛКА «ДОБАВИТЬ ВАКАНСИЮ» ========= */
+function AddJobModal({ open, onClose, onAdd }) {
+  const [title, setTitle] = useState("");
+  const [city, setCity] = useState("");
+  const [exp, setExp] = useState("");       // стаж/требуемый опыт
+  const [format, setFormat] = useState(""); // график/формат
+  const [salary, setSalary] = useState("");
+  const [duties, setDuties] = useState("");       // «обязанности»
+  const [requirements, setRequirements] = useState(""); // «требования»
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(""); setCity(""); setExp(""); setFormat("");
+    setSalary(""); setDuties(""); setRequirements(""); setError("");
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) return setError("Укажите профессию (название вакансии)");
+    if (!city.trim())  return setError("Укажите город");
+
+    onAdd({
+      id: "j_" + Math.random().toString(36).slice(2,9),
+      title: title.trim(),
+      city: city.trim(),
+      exp: exp.trim(),
+      format: format.trim(),
+      salary: salary.trim(),
+      duties: duties.trim(),
+      requirements: requirements.trim(),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addjob-title"
+         onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-shell" role="document">
+        <div className="modal-head">
+          <div className="modal-title" id="addjob-title">Добавить вакансию</div>
+          <button className="icon-close" onClick={onClose}>×</button>
+        </div>
+
+        <form className="modal-body" onSubmit={submit}>
+          <div className="grid-2">
+            <div className="field">
+              <label>Профессия<span className="req">*</span></label>
+              <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Frontend Developer" autoFocus />
+            </div>
+            <div className="field">
+              <label>Город<span className="req">*</span></label>
+              <input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы" />
+            </div>
+            <div className="field">
+              <label>Стаж / Требуемый опыт</label>
+              <input value={exp} onChange={(e)=>setExp(e.target.value)} placeholder="от 2 лет / Middle" />
+            </div>
+            <div className="field">
+              <label>График / Формат</label>
+              <input value={format} onChange={(e)=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote" />
+            </div>
+            <div className="field">
+              <label>Зарплата</label>
+              <input value={salary} onChange={(e)=>setSalary(e.target.value)} placeholder="до 900 000 ₸" />
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Обязанности <span className="hint">(списком, каждая строка — отдельный пункт)</span></label>
+            <textarea rows={5} value={duties} onChange={(e)=>setDuties(e.target.value)}
+              placeholder={`коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой`} />
+          </div>
+
+          <div className="field">
+            <label>Требования <span className="hint">(списком)</span></label>
+            <textarea rows={5} value={requirements} onChange={(e)=>setRequirements(e.target.value)}
+              placeholder={`дисциплина\nобучаемость\nответственность`} />
+          </div>
+
+          {error && <div className="form-error">{error}</div>}
+
+          <div className="modal-foot">
+            <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
+            <button type="submit" className="btn btn-primary">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» (обновлённый дизайн) ========= */
 function AddCandidateModal({ open, onClose, onAdd }) {
   const [name, setName] = useState("");
@@ -791,45 +900,6 @@ function EmployerTable() {
     </div>
   );
 }
-<div className="auth-backdrop" role="dialog" aria-modal="true">
-  {/* было: <div className="auth-modal" style={{width:"min(820px,96vw)"}}> */}
-  <div className="auth-modal modal-lg">
-    <div className="auth-head">
-      <div style={{fontWeight:600}}>Добавить вакансию</div>
-      <button className="auth-close" onClick={onClose}>×</button>
-    </div>
-
-    {/* форма без inline-стилей — только классы .field / .grid */}
-    <form className="auth-body" onSubmit={submit}>
-      <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
-        <div className="field"><label>Профессия / Должность*</label><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Frontend Developer"/></div>
-        <div className="field"><label>Город*</label><input value={city} onChange={e=>setCity(e.target.value)} placeholder="Алматы"/></div>
-        <div className="field"><label>Стаж / Требуемый опыт</label><input value={exp} onChange={e=>setExp(e.target.value)} placeholder="от 2 лет / Middle"/></div>
-        <div className="field"><label>График / Формат</label><input value={format} onChange={e=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote"/></div>
-        <div className="field" style={{gridColumn:"1 / -1"}}><label>Зарплата</label><input value={salary} onChange={e=>setSalary(e.target.value)} placeholder="до 900 000 ₸"/></div>
-      </div>
-
-      <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
-        <div className="field">
-          <label>Обязанности (каждая строка — отдельный пункт)</label>
-          <textarea rows={6} value={duties} onChange={e=>setDuties(e.target.value)} placeholder={"коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой"}/>
-        </div>
-        <div className="field">
-          <label>Требования (списком)</label>
-          <textarea rows={6} value={reqs} onChange={e=>setReqs(e.target.value)} placeholder={"дисциплина\nобучаемость\nответственность"}/>
-        </div>
-      </div>
-
-      {error && <div className="auth-error">{error}</div>}
-      <div className="auth-footer">
-        <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
-        <button type="submit" className="btn btn-primary">Сохранить</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-
 
 /* ========= СТРАНИЦА ========= */
 export default function Page() {
