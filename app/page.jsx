@@ -1179,18 +1179,40 @@ export default function Page() {
         .container{max-width:1100px;margin:0 auto;padding:24px}
         .header{position:sticky;top:0;z-index:10;backdrop-filter:saturate(1.3) blur(6px);background:rgba(255,255,255,.85);border-bottom:1px solid var(--line)}
         [data-theme="dark"] .header{background:rgba(15,23,42,.8)}
-        .header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:12px 24px}
-        .logo{font-weight:800; letter-spacing:.2px}
-        .mode{margin-left:16px;display:flex;border:2px solid var(--brand);border-radius:14px;overflow:hidden}
+        .header-inner {max-width: 1250px;margin: 0 auto;display: flex;align-items: center;justify-content: space-between;gap: 12px;padding: 10px 20px;}
+        .logo {
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .mode {
+            display: flex;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
         .seg{border:none;background:transparent;padding:10px 14px;font-weight:700;color:var(--muted);cursor:pointer}
         .seg-active{background:rgba(37,99,235,.12);color:var(--text)}
-        .search{margin-left:16px;flex:1;max-width:520px}
-        .search input{
-          width:100%;padding:14px 16px;border:2px solid var(--brand);border-radius:14px;background:#fff;color:#0f172a;font-size:15px;outline:none;
-          box-shadow:0 3px 0 rgba(37,99,235,.08)
+        .search {
+            flex: 1;
+            max-width: 560px;
+        }
+        .search input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: transparent;
+            color: var(--text);
+            font-size: 14px;
         }
         [data-theme="dark"] .search input{background:#0b1424;color:#e5efff;border-color:#1e3a8a}
-        .nav{margin-left:auto;display:flex;gap:10px;align-items:center}
+        .nav {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
         .nav button{font-size:14px;color:var(--muted);border:none;background:transparent;padding:8px 10px;border-radius:10px;cursor:pointer}
         .nav button.active{color:var(--text);background:rgba(37,99,235,.12)}
         .userbox{display:flex;align-items:center;gap:10px;margin-left:8px}
