@@ -136,7 +136,7 @@ function AuthModal({ open, onClose, onAuth }) {
   );
 }
 
-/* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» ========= */
+/* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» (обновлённый дизайн) ========= */
 function AddCandidateModal({ open, onClose, onAdd }) {
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
@@ -150,12 +150,29 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   const [eduText, setEduText] = useState("");
   const [error, setError] = useState("");
 
+  // блокируем прокрутку страницы, когда модалка открыта
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  // reset полей при каждом открытии
   useEffect(() => {
     if (!open) return;
     setName(""); setProfession(""); setDesiredSalary("");
     setCountry("Казахстан"); setCity(""); setExperience("");
     setEmail(""); setResumeUrl(""); setWorkText(""); setEduText(""); setError("");
   }, [open]);
+
+  // закрытие по Esc
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -174,9 +191,9 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   const submit = (e) => {
     e.preventDefault();
     setError("");
-    if (!name.trim()) return setError("Укажите ФИО");
-    if (!profession.trim()) return setError("Укажите профессию");
-    if (!city.trim()) return setError("Укажите город");
+    if (!name.trim())        return setError("Укажите ФИО");
+    if (!profession.trim())  return setError("Укажите профессию");
+    if (!city.trim())        return setError("Укажите город");
     const c = {
       id: "c_" + Math.random().toString(36).slice(2,9),
       name: name.trim(),
@@ -195,48 +212,155 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   };
 
   return (
-    <div className="auth-backdrop" role="dialog" aria-modal="true">
-      <div className="auth-modal" style={{width:"min(820px,96vw)"}}>
-        <div className="auth-head">
-          <div style={{fontWeight:600}}>Добавить соискателя</div>
-          <button className="auth-close" onClick={onClose}>×</button>
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="addcand-title"
+      onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="modal-shell" role="document">
+        {/* Header */}
+        <div className="modal-head">
+          <div className="modal-title" id="addcand-title">Добавить соискателя</div>
+          <button className="icon-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
-        <form className="auth-body" onSubmit={submit}>
-          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
-            <div className="field"><label>ФИО*</label><input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Иван Иванов"/></div>
-            <div className="field"><label>Профессия*</label><input value={profession} onChange={(e)=>setProfession(e.target.value)} placeholder="Frontend Developer"/></div>
-            <div className="field"><label>Желаемая зарплата</label><input value={desiredSalary} onChange={(e)=>setDesiredSalary(e.target.value)} placeholder="от 500 000 ₸"/></div>
-            <div className="field"><label>Страна</label><input value={country} onChange={(e)=>setCountry(e.target.value)} placeholder="Казахстан"/></div>
-            <div className="field"><label>Город*</label><input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы"/></div>
-            <div className="field"><label>Опыт</label><input value={experience} onChange={(e)=>setExperience(e.target.value)} placeholder="2 года"/></div>
-            <div className="field"><label>Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="user@example.com"/></div>
-            <div className="field"><label>Ссылка на резюме (PDF/Drive)</label><input value={resumeUrl} onChange={(e)=>setResumeUrl(e.target.value)} placeholder="https://..."/></div>
+
+        {/* Body (прокручиваемая) */}
+        <form className="modal-body" onSubmit={submit}>
+          <div className="grid-2">
+            <div className="field">
+              <label>ФИО<span className="req">*</span></label>
+              <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Иван Иванов" autoFocus />
+            </div>
+            <div className="field">
+              <label>Профессия<span className="req">*</span></label>
+              <input value={profession} onChange={(e)=>setProfession(e.target.value)} placeholder="Frontend Developer" />
+            </div>
+            <div className="field">
+              <label>Желаемая зарплата</label>
+              <input value={desiredSalary} onChange={(e)=>setDesiredSalary(e.target.value)} placeholder="от 500 000 ₸" />
+            </div>
+            <div className="field">
+              <label>Страна</label>
+              <input value={country} onChange={(e)=>setCountry(e.target.value)} placeholder="Казахстан" />
+            </div>
+            <div className="field">
+              <label>Город<span className="req">*</span></label>
+              <input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы" />
+            </div>
+            <div className="field">
+              <label>Опыт</label>
+              <input value={experience} onChange={(e)=>setExperience(e.target.value)} placeholder="2 года" />
+            </div>
+            <div className="field">
+              <label>Email</label>
+              <input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="user@example.com" />
+            </div>
+            <div className="field">
+              <label>Ссылка на резюме (PDF/Drive)</label>
+              <input value={resumeUrl} onChange={(e)=>setResumeUrl(e.target.value)} placeholder="https://..." />
+            </div>
           </div>
 
           <div className="field">
-            <label>Опыт работы (каждая строка: <strong>period | company | title</strong>)</label>
-            <textarea rows={6} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
-              value={workText} onChange={(e)=>setWorkText(e.target.value)}
-              placeholder={`авг 2025 — наст. время | HRI Lab at Nazarbayev University | Research Assistant\nиюн 2025 — авг 2025 | nFactorial Incubator | Full-Stack Trainee`} />
+            <label>Опыт работы <span className="hint">(каждая строка: period | company | title)</span></label>
+            <textarea
+              rows={6}
+              value={workText}
+              onChange={(e)=>setWorkText(e.target.value)}
+              placeholder={`авг 2025 — наст. время | HRI Lab | Research Assistant\nиюн 2025 — авг 2025 | nFactorial Incubator | Full-Stack Trainee`}
+            />
           </div>
 
           <div className="field">
-            <label>Образование (каждая строка: <strong>degree | place | field</strong>)</label>
-            <textarea rows={4} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
-              value={eduText} onChange={(e)=>setEduText(e.target.value)}
-              placeholder={`Бакалавр | Nazarbayev University | Computer Science`} />
+            <label>Образование <span className="hint">(каждая строка: degree | place | field)</span></label>
+            <textarea
+              rows={4}
+              value={eduText}
+              onChange={(e)=>setEduText(e.target.value)}
+              placeholder={`Бакалавр | Nazarbayev University | Computer Science`}
+            />
           </div>
 
-          {error && <div className="auth-error">{error}</div>}
-          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          {error && <div className="form-error">{error}</div>}
+
+          {/* Sticky footer */}
+          <div className="modal-foot">
             <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
             <button type="submit" className="btn btn-primary">Сохранить</button>
           </div>
         </form>
       </div>
+
+      {/* Стили модалки */}
+      <style jsx global>{`
+        .modal-backdrop{
+          position:fixed; inset:0; z-index:1000;
+          background:rgba(2,8,23,.55); backdrop-filter:blur(6px);
+          display:flex; align-items:center; justify-content:center;
+          padding:24px;
+          animation:fadeIn .15s ease-out;
+        }
+        .modal-shell{
+          width:min(920px,96vw);
+          max-height:90vh;
+          background:var(--card);
+          border:1px solid var(--line);
+          border-radius:20px;
+          box-shadow:0 24px 80px rgba(2,8,23,.28);
+          overflow:hidden;
+          transform:scale(.98);
+          animation:popIn .15s ease-out forwards;
+        }
+        .modal-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding:14px 16px;
+          background:#f1f5f9; border-bottom:1px solid var(--line);
+        }
+        [data-theme="dark"] .modal-head{ background:#0b1424 }
+        .modal-title{ font-weight:700 }
+        .icon-close{
+          border:none; background:transparent; font-size:22px; line-height:1;
+          color:#94a3b8; cursor:pointer;
+        }
+        .modal-body{
+          padding:16px;
+          overflow:auto;
+          max-height:calc(90vh - 56px);
+        }
+        .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px }
+        @media (max-width:820px){ .grid-2{ grid-template-columns:1fr } }
+        .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
+        .field label{ font-size:13px; color:var(--muted) }
+        .req{ color:#ef4444; margin-left:4px }
+        .hint{ color:var(--muted); font-weight:400; }
+        .field input, .field textarea{
+          padding:10px 12px; border:1px solid var(--line); border-radius:12px;
+          background:transparent; color:var(--text); font-size:14px;
+        }
+        .field textarea{ resize:vertical }
+        .form-error{
+          color:#ef4444; background:#fef2f2; border:1px solid #fecaca;
+          padding:8px 10px; border-radius:10px; font-size:13px; margin-top:4px;
+        }
+        .modal-foot{
+          position:sticky; bottom:0; display:flex; gap:10px; justify-content:flex-end;
+          background:linear-gradient(to top, var(--card) 80%, rgba(0,0,0,0) );
+          padding-top:12px; margin-top:6px;
+        }
+        .btn{ border:none; cursor:pointer; border-radius:12px; padding:10px 14px; font-weight:700; font-size:14px }
+        .btn-primary{ background:var(--brand); color:#fff }
+        .btn-primary:hover{ background:#1e4ed8 }
+        .btn-outline{ background:transparent; border:1px solid var(--brand); color:var(--brand) }
+        .btn-outline:hover{ background:rgba(37,99,235,.08) }
+        @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
+        @keyframes popIn{ to{ transform:scale(1) } }
+      `}</style>
     </div>
   );
 }
+
 
 /* ========= МОДАЛКА ПРЕДПРОСМОТРА ========= */
 function CandidatePreview({ open, onClose, candidate }) {
