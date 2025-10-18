@@ -493,69 +493,28 @@ function CandidatePreview({ open, onClose, candidate }) {
 
 /* ========= SMARTBOT НА GEMINI ========= */
 function SmartBotModal({ open, onClose, job }) {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:"..."}
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
   const listRef = useRef(null);
+
+  // агрегируем сигналы (city/exp/format) в ходе диалога
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
 
-  // Генерируем уникальный ID для диалога на основе вакансии и пользователя
-  const getConversationId = () => {
-    const user = JSON.parse(localStorage.getItem("jb_current") || "null");
-    return `job_${job.id}_${user?.email || "anonymous"}`;
-  };
-
-  // Загружаем историю из localStorage при открытии
   useEffect(() => {
     if (!open) return;
-    
-    const conversationId = getConversationId();
-    const saved = localStorage.getItem(`conversation_${conversationId}`);
-    
-    if (saved) {
-      try {
-        const { messages: savedMessages, signals: savedSignals } = JSON.parse(saved);
-        setMessages(savedMessages || []);
-        setSignals(savedSignals || { city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
-        
-        // Если есть сообщения, не инициализируем новый диалог
-        if (savedMessages && savedMessages.length > 0) return;
-      } catch (e) {
-        console.error("Error loading conversation:", e);
-      }
-    }
-
-    // Только если нет сохраненной истории - начинаем новый диалог
     setMessages([]);
     setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
     setFinalScore(null);
+    // стукнемся INIT для первого вопроса
     askGemini([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id]);
 
-  // Сохраняем историю при изменении
   useEffect(() => {
-    if (!open || messages.length === 0) return;
-    
-    const conversationId = getConversationId();
-    const dataToSave = {
-      messages,
-      signals,
-      finalScore,
-      timestamp: Date.now()
-    };
-    
-    localStorage.setItem(`conversation_${conversationId}`, JSON.stringify(dataToSave));
-  }, [messages, signals, finalScore, open]);
-
-  // Очищаем историю при закрытии модалки с завершенным диалогом
-  const handleClose = () => {
-    if (finalScore) {
-      const conversationId = getConversationId();
-      localStorage.removeItem(`conversation_${conversationId}`);
-    }
-    onClose();
-  };
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
 
   const push = (role, content) => {
     setMessages((arr) => [...arr, { role, content }]);
@@ -564,40 +523,22 @@ function SmartBotModal({ open, onClose, job }) {
   async function askGemini(history) {
     setReplying(true);
     try {
+      // профиль текущего пользователя (если авторизован) — мягкий контекст
       const u = JSON.parse(localStorage.getItem("jb_current") || "null");
       const profile = u ? {
         name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        city: "", 
-        experience: "", 
-        profession: "", 
-        preferredFormat: "",
-        email: u.email || ""
+        city: "", experience: "", profession: "", preferredFormat: ""
       } : {};
-
-      const conversationId = getConversationId();
-
-      // Убедимся, что history не пустой для нового диалога
-      const effectiveHistory = history.length === 0 ? [] : history;
 
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          history: effectiveHistory,
-          vacancy: { 
-            id: job.id, 
-            title: job.title, 
-            city: job.city, 
-            exp: job.exp, 
-            format: job.format,
-            company: "Tech Company",
-            description: `Вакансия ${job.title} в городе ${job.city}, требуемый опыт: ${job.exp}, формат работы: ${job.format}`
-          },
-          profile,
-          conversationId
+          history,
+          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
+          profile
         }),
       });
-      
       const data = await res.json();
       if (!data.ok) {
         push("assistant", "Извините, сервер ассистента недоступен.");
@@ -605,73 +546,27 @@ function SmartBotModal({ open, onClose, job }) {
         return;
       }
 
+      // показать ответ
       push("assistant", data.reply);
 
-      // Обновляем сигналы на основе ответа
-      const replyText = data.reply.toLowerCase();
-      const newSignals = { ...signals };
-      
-      if (replyText.includes('алмат') || replyText.includes('алматы')) {
-        newSignals.city = "Алматы";
-      } else if (replyText.includes('астан') || replyText.includes('астана')) {
-        newSignals.city = "Астана";
-      } else if (replyText.includes('шымкент')) {
-        newSignals.city = "Шымкент";
-      } else if (replyText.includes('караганда')) {
-        newSignals.city = "Караганда";
-      }
-      
-      if (replyText.match(/\d+\s*год/)) {
-        const match = replyText.match(/(\d+)\s*год/);
-        if (match) newSignals.exp = `${match[1]} лет`;
-      } else if (replyText.includes('опыт')) {
-        newSignals.exp = "есть опыт";
-      }
-      
-      if (replyText.includes('удален') || replyText.includes('remote')) {
-        newSignals.format = "Удалённый";
-      } else if (replyText.includes('офис')) {
-        newSignals.format = "Офис";
-      } else if (replyText.includes('гибрид')) {
-        newSignals.format = "Гибрид";
-      }
+      // обновить сигналы
+      setSignals((prev) => ({
+        city: data.signals?.city || prev.city,
+        exp: data.signals?.exp || prev.exp,
+        format: data.signals?.format || prev.format,
+      }));
 
-      setSignals(newSignals);
-
-      // Если диалог завершён
-      if (data.next_action === "finish") {
-        const score = calculateRelevanceScore(newSignals, job);
-        setFinalScore(score);
-        saveApplication(score);
+      // если финал — показать счёт и записать отклик
+      if (typeof data.final_score === "number" && data.next_action === "finish") {
+        setFinalScore(data.final_score);
+        saveApplication(data.final_score);
+        push("assistant", `Итоговая релевантность: ${data.final_score}%`);
       }
-
     } catch (e) {
-      console.error("API Error:", e);
-      push("assistant", "Произошла ошибка соединения. Пожалуйста, попробуйте еще раз.");
+      push("assistant", "Произошла ошибка соединения.");
     } finally {
       setReplying(false);
     }
-  }
-
-  function calculateRelevanceScore(signals, job) {
-    let score = 0;
-    
-    // Город (50% веса)
-    if (signals.city === job.city) score += 50;
-    else if (signals.city && job.city) score += 25;
-    
-    // Опыт (30% веса)
-    if (signals.exp && job.exp) {
-      if (signals.exp.includes('+') || signals.exp.includes('более')) score += 30;
-      else if (parseInt(signals.exp) >= parseInt(job.exp) || 0) score += 30;
-      else score += 15;
-    }
-    
-    // Формат работы (20% веса)
-    if (signals.format === job.format) score += 20;
-    else if (signals.format && job.format) score += 10;
-    
-    return Math.min(100, score);
   }
 
   function saveApplication(score) {
@@ -682,12 +577,9 @@ function SmartBotModal({ open, onClose, job }) {
     all.push({
       name: candidateName,
       email: currentUser?.email || "",
-      city: signals.city, 
-      exp: signals.exp, 
-      format: signals.format,
+      city: signals.city, exp: signals.exp, format: signals.format,
       score: Number(score) || 0,
-      jobId: job.id, 
-      jobTitle: job.title,
+      jobId: job.id, jobTitle: job.title,
       date: new Date().toISOString()
     });
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
@@ -697,11 +589,10 @@ function SmartBotModal({ open, onClose, job }) {
     const v = (text || "").trim();
     if (!v || replying) return;
     push("user", v);
-    
+    // соберём историю для бэка
     const hist = [...messages, { role: "user", content: v }]
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.content }));
-      
     askGemini(hist);
   };
 
@@ -709,10 +600,10 @@ function SmartBotModal({ open, onClose, job }) {
 
   return (
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
-      <div className="sb-modal" style={{width:"min(760px,94vw)"}}>
+      <div className="sb-modal">
         <div className="sb-head">
           <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг (Gemini)</div>
-          <button className="sb-close" aria-label="Закрыть" onClick={handleClose}>×</button>
+          <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
           {/* Инфо о вакансии */}
@@ -731,17 +622,13 @@ function SmartBotModal({ open, onClose, job }) {
 
           {/* Сообщения */}
           <div className="sb-messages" ref={listRef}>
-            {messages.length === 0 && !replying ? (
-              <div className="sb-bot"><b>SmartBot:</b> Загрузка диалога...</div>
-            ) : (
-              messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={m.role === "assistant" ? "sb-bot" : "sb-user"}
-                  dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}
-                />
-              ))
-            )}
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={m.role === "assistant" ? "sb-bot" : "sb-user"}
+                dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}
+              />
+            ))}
             {replying && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
           </div>
 
@@ -751,7 +638,7 @@ function SmartBotModal({ open, onClose, job }) {
               ref={inputRef}
               type="text"
               placeholder="Введите ответ..."
-              disabled={replying || finalScore !== null}
+              disabled={replying}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   const v = e.currentTarget.value;
@@ -761,7 +648,7 @@ function SmartBotModal({ open, onClose, job }) {
               }}
             />
             <button
-              disabled={replying || finalScore !== null}
+              disabled={replying}
               onClick={() => {
                 const el = inputRef.current;
                 const v = el?.value?.trim();
@@ -773,23 +660,26 @@ function SmartBotModal({ open, onClose, job }) {
               Отправить
             </button>
           </div>
-
-          {finalScore !== null && (
-            <div style={{
-              marginTop: 12,
-              padding: 12,
-              background: "var(--good-bg)",
-              border: "1px solid var(--good-br)",
-              borderRadius: 12,
-              color: "var(--good-t)",
-              fontSize: 14,
-              textAlign: "center"
-            }}>
-              Диалог завершён! Релевантность: <b>{finalScore}%</b>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* стили те же */}
+      <style jsx global>{`
+        .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
+        .sb-modal{width:min(760px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
+        .sb-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
+        [data-theme="dark"] .sb-head{background:#0b1424}
+        .sb-title{font-weight:600}
+        .sb-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
+        .sb-body{padding:12px 16px}
+        .sb-messages{height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
+        .sb-bot,.sb-user{max-width:78%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}
+        .sb-bot{background:#f1f5f9;align-self:flex-start}[data-theme="dark"] .sb-bot{background:#122033}
+        .sb-user{background:#dbeafe;align-self:flex-end}[data-theme="dark"] .sb-user{background:#1d3a6a}
+        .sb-input{display:flex;gap:8px;margin-top:12px}
+        .sb-input input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:var(--text)}
+        .sb-input button{padding:10px 12px;border-radius:12px;border:none;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
+      `}</style>
     </div>
   );
 }
@@ -835,10 +725,11 @@ function EmployerTable() {
   );
 }
 
+/* ========= СТРАНИЦА ========= */
 export default function Page() {
   const [theme, setTheme] = useState("light");
-  const [view, setView] = useState("jobs");
-  const [mode, setMode] = useState("find_job");
+  const [view, setView] = useState("jobs");        // jobs | employer
+  const [mode, setMode] = useState("find_job");    // find_job | find_employee
   const [modalOpen, setModalOpen] = useState(false);
   const [job, setJob] = useState(JOBS[0]);
   const [authOpen, setAuthOpen] = useState(false);
@@ -867,32 +758,7 @@ export default function Page() {
     if (cur) {
       try { const u = JSON.parse(cur); setUser(u); if (u.role === "applicant") setView("jobs"); } catch {}
     }
-
-    // ⭐⭐⭐ ДОБАВЬТЕ ЭТОТ КОД ЗДЕСЬ ⭐⭐⭐
-    // Очистка старых диалогов при загрузке
-    const now = Date.now();
-    const dayInMs = 24 * 60 * 60 * 1000;
-    
-    // Очищаем диалоги старше 7 дней
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('conversation_')) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key));
-          if (now - data.timestamp > 7 * dayInMs) {
-            localStorage.removeItem(key);
-          }
-        } catch (e) {
-          // Игнорируем ошибки парсинга
-          console.log('Ошибка при очистке диалога:', key);
-        }
-      }
-    }
-    // ⭐⭐⭐ КОНЕЦ ДОБАВЛЕННОГО КОДА ⭐⭐⭐
-
   }, []);
-
-  // ... остальной код компонента
 
   const persistCandidates = (arr) => {
     setCandidates(arr);
