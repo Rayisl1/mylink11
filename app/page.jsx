@@ -521,53 +521,104 @@ function SmartBotModal({ open, onClose, job }) {
   };
 
   async function askGemini(history) {
-    setReplying(true);
-    try {
-      // профиль текущего пользователя (если авторизован) — мягкий контекст
-      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? {
-        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        city: "", experience: "", profession: "", preferredFormat: ""
-      } : {};
+  setReplying(true);
+  try {
+    const u = JSON.parse(localStorage.getItem("jb_current") || "null");
+    const profile = u ? {
+      name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+      city: "", experience: "", profession: "", preferredFormat: ""
+    } : {};
 
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history,
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        push("assistant", "Извините, сервер ассистента недоступен.");
-        setReplying(false);
-        return;
-      }
+    // Используем ID вакансии как conversationId для простоты
+    const conversationId = `job_${job.id}_${u?.email || "anonymous"}`;
 
-      // показать ответ
-      push("assistant", data.reply);
-
-      // обновить сигналы
-      setSignals((prev) => ({
-        city: data.signals?.city || prev.city,
-        exp: data.signals?.exp || prev.exp,
-        format: data.signals?.format || prev.format,
-      }));
-
-      // если финал — показать счёт и записать отклик
-      if (typeof data.final_score === "number" && data.next_action === "finish") {
-        setFinalScore(data.final_score);
-        saveApplication(data.final_score);
-        push("assistant", `Итоговая релевантность: ${data.final_score}%`);
-      }
-    } catch (e) {
-      push("assistant", "Произошла ошибка соединения.");
-    } finally {
+    const res = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        history,
+        vacancy: { 
+          id: job.id, 
+          title: job.title, 
+          city: job.city, 
+          exp: job.exp, 
+          format: job.format,
+          company: "Компания", // добавьте нужные данные
+          description: "Описание вакансии" // добавьте описание
+        },
+        profile,
+        conversationId
+      }),
+    });
+    
+    const data = await res.json();
+    if (!data.ok) {
+      push("assistant", "Извините, сервер ассистента недоступен.");
       setReplying(false);
+      return;
     }
+
+    // Показываем ответ
+    push("assistant", data.reply);
+
+    // Обновляем сигналы на основе ответа (адаптируем под вашу логику)
+    const replyText = data.reply.toLowerCase();
+    const newSignals = { ...signals };
+    
+    if (replyText.includes('алмат') || replyText.includes('алматы')) {
+      newSignals.city = "Алматы";
+    } else if (replyText.includes('астан') || replyText.includes('астана')) {
+      newSignals.city = "Астана";
+    }
+    
+    if (replyText.match(/\d+\s*год/)) {
+      newSignals.exp = replyText.match(/\d+\s*год/)[0];
+    }
+    
+    if (replyText.includes('удален') || replyText.includes('remote')) {
+      newSignals.format = "Удалённый";
+    } else if (replyText.includes('офис') || replyText.includes('гибрид')) {
+      newSignals.format = replyText.includes('гибрид') ? "Гибрид" : "Офис";
+    }
+
+    setSignals(newSignals);
+
+    // Если диалог завершён - рассчитываем score и сохраняем
+    if (data.next_action === "finish") {
+      const score = calculateRelevanceScore(newSignals, job);
+      setFinalScore(score);
+      saveApplication(score);
+    }
+
+  } catch (e) {
+    push("assistant", "Произошла ошибка соединения.");
+  } finally {
+    setReplying(false);
   }
+}
+
+// Функция для расчета релевантности
+function calculateRelevanceScore(signals, job) {
+  let score = 0;
+  
+  // Город (50% веса)
+  if (signals.city === job.city) score += 50;
+  else if (signals.city && job.city) score += 25;
+  
+  // Опыт (30% веса) - простая логика
+  if (signals.exp && job.exp) {
+    const userExp = parseInt(signals.exp) || 0;
+    const requiredExp = parseInt(job.exp) || 0;
+    if (userExp >= requiredExp) score += 30;
+    else if (userExp > 0) score += 15;
+  }
+  
+  // Формат работы (20% веса)
+  if (signals.format === job.format) score += 20;
+  else if (signals.format && job.format) score += 10;
+  
+  return Math.min(100, score);
+}
 
   function saveApplication(score) {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
