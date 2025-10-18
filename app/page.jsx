@@ -591,54 +591,91 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
-  // =========== Gemini API ===========
-  async function askGemini(history) {
-    setReplying(true);
-    try {
-      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? {
-        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        city: "", experience: "", profession: "", preferredFormat: ""
-      } : {};
+ // =========== Gemini / Legacy API compatible ===========
+// Работает и с твоим старым форматом ответа, и с новым.
+// Не требует {ok:true}. Пытается «угадывать» поля.
+async function askGemini(history) {
+  setReplying(true);
+  try {
+    const u = JSON.parse(localStorage.getItem("jb_current") || "null");
+    const profile = u ? {
+      name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+      city: "", experience: "", profession: "", preferredFormat: ""
+    } : {};
 
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history,
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setMessages((arr)=>[...arr, { role:"assistant", content:"Извините, сервер ассистента недоступен." }]);
-        setReplying(false);
-        return;
-      }
+    const res = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        history,
+        vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
+        profile
+      }),
+    });
 
-      // текст бота
-      setMessages((arr)=>[...arr, { role:"assistant", content: data.reply }]);
-
-      // обновляем извлечённые сигналы
-      setSignals((prev) => ({
-        city: data.signals?.city || prev.city,
-        exp: data.signals?.exp || prev.exp,
-        format: data.signals?.format || prev.format,
-      }));
-
-      // финал — записываем оценку
-      if (typeof data.final_score === "number" && data.next_action === "finish") {
-        setFinalScore(data.final_score);
-        saveApplication(data.final_score);
-        setMessages((arr)=>[...arr, { role:"assistant", content:`Итоговая релевантность: ${data.final_score}%` }]);
-      }
-    } catch {
-      setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
-    } finally {
-      setReplying(false);
+    // Если сервер вернул ошибку HTTP — покажем кратко и выходим
+    if (!res.ok) {
+      setMessages((arr)=>[...arr, { role:"assistant", content:"Извините, сервер ассистента недоступен." }]);
+      return;
     }
+
+    const data = await res.json();
+
+    // ---- Универсальная расклейка ответа (legacy/new) ----
+    // Текст ответа бота:
+    const reply =
+      data.reply ??
+      data.text ??
+      data.message ??
+      data.output ??
+      (typeof data === "string" ? data : "") ??
+      "Готов продолжить скрининг.";
+
+    // Сигналы (город/опыт/формат) могут прилететь в разных местах
+    const rawSignals =
+      data.signals ??
+      data.meta?.signals ??
+      data.extracted ??
+      data.info ??
+      {};
+
+    const norm = (v) => (typeof v === "string" ? v : (v?.value ?? v?.text ?? v ?? "неизвестно"));
+    const nextSignals = {
+      city:   norm(rawSignals.city ?? signals.city ?? "неизвестно"),
+      exp:    norm(rawSignals.exp ?? rawSignals.experience ?? signals.exp ?? "неизвестно"),
+      format: norm(rawSignals.format ?? signals.format ?? "неизвестно"),
+    };
+
+    // Финальный процент может называться по-разному
+    const final =
+      data.final_score ??
+      data.finalScore ??
+      data.score ??
+      data.relevance ??
+      null;
+
+    // Флаг завершения
+    const done =
+      data.next_action === "finish" ||
+      data.done === true ||
+      typeof final === "number";
+
+    // ---- Применяем к UI ----
+    setMessages((arr)=>[...arr, { role:"assistant", content: reply }]);
+    setSignals(nextSignals);
+
+    if (done && typeof final === "number") {
+      setFinalScore(final);
+      saveApplication(final); // уже есть в твоём коде
+      setMessages((arr)=>[...arr, { role:"assistant", content:`Итоговая релевантность: ${final}%` }]);
+    }
+  } catch {
+    setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
+  } finally {
+    setReplying(false);
   }
+}
+
 
   const sendUser = (text) => {
     const v = (text || "").trim();
