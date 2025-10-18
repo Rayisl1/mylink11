@@ -520,54 +520,81 @@ function SmartBotModal({ open, onClose, job }) {
     setMessages((arr) => [...arr, { role, content }]);
   };
 
-  async function askGemini(history) {
-    setReplying(true);
-    try {
-      // профиль текущего пользователя (если авторизован) — мягкий контекст
-      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? {
-        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        city: "", experience: "", profession: "", preferredFormat: ""
-      } : {};
+async function askGemini(history) {
+  setReplying(true);
+  try {
+    const u = JSON.parse(localStorage.getItem("jb_current") || "null");
+    const profile = u ? {
+      name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+      city: "", experience: "", profession: "", preferredFormat: ""
+    } : {};
 
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history,
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        push("assistant", "Извините, сервер ассистента недоступен.");
-        setReplying(false);
-        return;
+    // Формируем правильный запрос для Gemini API
+    const requestData = {
+      contents: [
+        {
+          parts: [
+            {
+              text: `История диалога: ${JSON.stringify(history)}\n\nВакансия: ${JSON.stringify({
+                id: job.id,
+                title: job.title,
+                city: job.city,
+                exp: job.exp,
+                format: job.format
+              })}\n\nПрофиль пользователя: ${JSON.stringify(profile)}\n\nПродолжи диалог как HR-ассистент.`
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 1024,
       }
+    };
 
-      // показать ответ
-      push("assistant", data.reply);
+    const res = await fetch("/api/assistant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestData),
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Ошибка сервера');
+    }
 
-      // обновить сигналы
+    // Обработка ответа (адаптируйте под структуру вашего API)
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      const reply = data.candidates[0].content.parts[0].text;
+      push("assistant", reply);
+      
+      // Обновление сигналов и финального счета
+      // (это нужно адаптировать под логику вашего бекенда)
       setSignals((prev) => ({
         city: data.signals?.city || prev.city,
         exp: data.signals?.exp || prev.exp,
         format: data.signals?.format || prev.format,
       }));
 
-      // если финал — показать счёт и записать отклик
       if (typeof data.final_score === "number" && data.next_action === "finish") {
         setFinalScore(data.final_score);
         saveApplication(data.final_score);
         push("assistant", `Итоговая релевантность: ${data.final_score}%`);
       }
-    } catch (e) {
-      push("assistant", "Произошла ошибка соединения.");
-    } finally {
-      setReplying(false);
+    } else {
+      push("assistant", "Не удалось получить ответ от ассистента.");
     }
+    
+  } catch (e) {
+    console.error("Ошибка:", e);
+    push("assistant", "Произошла ошибка соединения: " + e.message);
+  } finally {
+    setReplying(false);
   }
+}
 
   function saveApplication(score) {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
