@@ -491,90 +491,186 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= ЛОКАЛЬНЫЙ SMARTBOT (как раньше, укорочено) ========= */
+/* ========= SMARTBOT НА GEMINI ========= */
 function SmartBotModal({ open, onClose, job }) {
-  const [step, setStep] = useState(0);
-  const [candidate, setCandidate] = useState({ name: "", city: "", exp: "", format: "" });
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:"..."}
+  const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
   const listRef = useRef(null);
-  const push = (sender, html) => setMessages((arr) => [...arr, { sender, html }]);
 
-  const normalize = (v) => {
-    const t = (v || "").toLowerCase().trim();
-    if (["да","y","yes","ага","угу","ок","+"].includes(t)) return "да";
-    if (["нет","n","no","-","неа"].includes(t)) return "нет";
-    return t;
+  // агрегируем сигналы (city/exp/format) в ходе диалога
+  const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
+  const [finalScore, setFinalScore] = useState(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setMessages([]);
+    setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
+    setFinalScore(null);
+    // стукнемся INIT для первого вопроса
+    askGemini([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, job?.id]);
+
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages]);
+
+  const push = (role, content) => {
+    setMessages((arr) => [...arr, { role, content }]);
   };
-  const ask = () => {
-    if (step === 0) push("bot", `Спасибо за интерес к вакансии «${esc(job.title)}». Как вас зовут?`);
-    if (step === 1) push("bot", `Вы сейчас в городе ${esc(job.city)}?`);
-    if (step === 2) push("bot", `Есть минимум ${esc(job.exp)}?`);
-    if (step === 3) push("bot", `Формат ${esc(job.format)}. Подходит?`);
-    if (step === 4) { push("bot", "Спасибо! Оцениваю вашу релевантность…"); finish(); }
-  };
-  const finish = () => {
-    let score = 100;
-    if (candidate.city !== "да") score -= 30;
-    if (candidate.exp !== "да") score -= 40;
-    if (candidate.format !== "да") score -= 30;
-    if (score < 0) score = 0;
-    const tone = score >= 80 ? "good" : score >= 60 ? "warn" : "bad";
-    push("bot", `Релевантность: <span class="score ${tone}">${score}%</span>`);
-    push("bot", "Спасибо! Ваш отклик сохранён (демо).");
+
+  async function askGemini(history) {
+    setReplying(true);
+    try {
+      // профиль текущего пользователя (если авторизован) — мягкий контекст
+      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
+      const profile = u ? {
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+        city: "", experience: "", profession: "", preferredFormat: ""
+      } : {};
+
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          history,
+          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
+          profile
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        push("assistant", "Извините, сервер ассистента недоступен.");
+        setReplying(false);
+        return;
+      }
+
+      // показать ответ
+      push("assistant", data.reply);
+
+      // обновить сигналы
+      setSignals((prev) => ({
+        city: data.signals?.city || prev.city,
+        exp: data.signals?.exp || prev.exp,
+        format: data.signals?.format || prev.format,
+      }));
+
+      // если финал — показать счёт и записать отклик
+      if (typeof data.final_score === "number" && data.next_action === "finish") {
+        setFinalScore(data.final_score);
+        saveApplication(data.final_score);
+        push("assistant", `Итоговая релевантность: ${data.final_score}%`);
+      }
+    } catch (e) {
+      push("assistant", "Произошла ошибка соединения.");
+    } finally {
+      setReplying(false);
+    }
+  }
+
+  function saveApplication(score) {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
     const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
-    const row = {
-      name: candidate.name || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат"),
+    const candidateName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат";
+
+    all.push({
+      name: candidateName,
       email: currentUser?.email || "",
-      city: candidate.city, exp: candidate.exp, format: candidate.format,
-      score, jobId: job.id, jobTitle: job.title, date: new Date().toISOString()
-    };
-    all.push(row);
+      city: signals.city, exp: signals.exp, format: signals.format,
+      score: Number(score) || 0,
+      jobId: job.id, jobTitle: job.title,
+      date: new Date().toISOString()
+    });
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
-    setStep(999);
-  };
-  const handleUser = (text) => {
+  }
+
+  const sendUser = (text) => {
     const v = (text || "").trim();
-    if (!v) return;
-    push("user", esc(v));
-    if (step === 0) { setCandidate((c)=>({...c, name: v})); setStep(1); return; }
-    if (step === 1) { setCandidate((c)=>({...c, city: normalize(v)})); setStep(2); return; }
-    if (step === 2) { setCandidate((c)=>({...c, exp: normalize(v)})); setStep(3); return; }
-    if (step === 3) { setCandidate((c)=>({...c, format: normalize(v)})); setStep(4); return; }
-    push("bot", "Принято!");
+    if (!v || replying) return;
+    push("user", v);
+    // соберём историю для бэка
+    const hist = [...messages, { role: "user", content: v }]
+      .filter(m => m.role === "user" || m.role === "assistant")
+      .map(m => ({ role: m.role, content: m.content }));
+    askGemini(hist);
   };
-  useEffect(()=>{ if(open){ setStep(0); setCandidate({name:"",city:"",exp:"",format:""}); setMessages([]);} },[open, job?.id]);
-  useEffect(()=>{ if(open) ask(); },[step, open]);
-  useEffect(()=>{ listRef.current?.scrollTo({ top:listRef.current.scrollHeight, behavior:"smooth" }); },[messages]);
+
   if (!open) return null;
 
   return (
-    <div className="sb-backdrop" role="dialog" aria-modal="true">
+    <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
-        <div className="sb-head"><div className="sb-title">🤖 SmartBot — быстрый скрининг</div><button className="sb-close" onClick={onClose}>×</button></div>
+        <div className="sb-head">
+          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг (Gemini)</div>
+          <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
+        </div>
         <div className="sb-body">
-          <div className="sb-messages" ref={listRef}>
-            {messages.map((m,i)=>(
-              <div key={i} className={clsx(m.sender==="bot"?"sb-bot":"sb-user")}
-                   dangerouslySetInnerHTML={{__html:`<b>${m.sender==="bot"?"SmartBot":"Вы"}:</b> ${m.html}`}}/>
-            ))}
+          {/* Инфо о вакансии */}
+          <div className="card" style={{marginBottom:12}}>
+            <div className="title" style={{marginBottom:6}}>{job.title}</div>
+            <div className="meta">
+              <span className="pill">{job.city}</span>
+              <span className="pill">{job.exp}</span>
+              <span className="pill">{job.format}</span>
+            </div>
+            <div style={{fontSize:12, color:"var(--muted)"}}>
+              Сигналы: город — <b>{signals.city}</b>, опыт — <b>{signals.exp}</b>, формат — <b>{signals.format}</b>
+              {finalScore !== null && <> • Итог: <b>{finalScore}%</b></>}
+            </div>
           </div>
+
+          {/* Сообщения */}
+          <div className="sb-messages" ref={listRef}>
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={m.role === "assistant" ? "sb-bot" : "sb-user"}
+                dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}
+              />
+            ))}
+            {replying && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
+          </div>
+
+          {/* Ввод */}
           <div className="sb-input">
-            <input ref={inputRef} type="text" placeholder="Введите ответ..."
-              onKeyDown={(e)=>{ if(e.key==="Enter"){ const v=e.currentTarget.value; e.currentTarget.value=""; handleUser(v); }}}/>
-            <button onClick={()=>{ const el=inputRef.current; const v=el?.value?.trim(); if(!v) return; el.value=""; handleUser(v); }}>Отправить</button>
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Введите ответ..."
+              disabled={replying}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const v = e.currentTarget.value;
+                  e.currentTarget.value = "";
+                  sendUser(v);
+                }
+              }}
+            />
+            <button
+              disabled={replying}
+              onClick={() => {
+                const el = inputRef.current;
+                const v = el?.value?.trim();
+                if (!v) return;
+                el.value = "";
+                sendUser(v);
+              }}
+            >
+              Отправить
+            </button>
           </div>
         </div>
       </div>
 
+      {/* стили те же */}
       <style jsx global>{`
         .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
-        .sb-modal{width:min(720px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
+        .sb-modal{width:min(760px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
         .sb-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
         [data-theme="dark"] .sb-head{background:#0b1424}
         .sb-title{font-weight:600}
-        .sb-close{border:none;background:transparent;font-size:20px;cursor:pointer;color:#94a3b8}
+        .sb-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
         .sb-body{padding:12px 16px}
         .sb-messages{height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
         .sb-bot,.sb-user{max-width:78%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}
@@ -583,14 +679,11 @@ function SmartBotModal({ open, onClose, job }) {
         .sb-input{display:flex;gap:8px;margin-top:12px}
         .sb-input input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:var(--text)}
         .sb-input button{padding:10px 12px;border-radius:12px;border:none;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
-        .score{display:inline-block;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:600}
-        .score.good{background:var(--good-bg);color:var(--good-t);border:1px solid var(--good-br)}
-        .score.warn{background:var(--warn-bg);color:var(--warn-t);border:1px solid var(--warn-br)}
-        .score.bad{background:var(--bad-bg);color:var(--bad-t);border:1px solid var(--bad-br)}
       `}</style>
     </div>
   );
 }
+
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ ========= */
 function EmployerTable() {
