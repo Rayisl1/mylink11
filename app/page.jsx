@@ -491,14 +491,13 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= SMARTBOT НА GEMINI ========= */
-function SmartBotModal({ open, onClose, job }) {
+/* ========= SMARTBOT (автоформула + поддержка candidate) ========= */
+function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]); // {role:"user"|"assistant", content:"..."}
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  // агрегируем сигналы (city/exp/format) в ходе диалога
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
 
@@ -507,93 +506,109 @@ function SmartBotModal({ open, onClose, job }) {
     setMessages([]);
     setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
     setFinalScore(null);
-    // стукнемся INIT для первого вопроса
-    askGemini([]);
+
+    // Если модалка открыта для конкретного кандидата — сразу считаем авто-оценку и сохраняем
+    if (candidate) {
+      const score = computeAutoScore(candidate, job);
+      setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
+      setSignals({
+        city: candidate.city || "неизвестно",
+        exp: candidate.experience || "неизвестно",
+        format: job.format || "неизвестно",
+      });
+      setFinalScore(score);
+      saveApplication(score, candidate);
+      return;
+    }
+
+    // Иначе — интерактивный сценарий (если решишь подключить API позже)
+    // askGemini([]); // закомментировано, т.к. сейчас используем автоформулу для работодателя
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, job?.id]);
+  }, [open, job?.id, candidate?.id]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  const push = (role, content) => {
-    setMessages((arr) => [...arr, { role, content }]);
-  };
-
-  async function askGemini(history) {
-    setReplying(true);
-    try {
-      // профиль текущего пользователя (если авторизован) — мягкий контекст
-      const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? {
-        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
-        city: "", experience: "", profession: "", preferredFormat: ""
-      } : {};
-
-      const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history,
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
-        }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        push("assistant", "Извините, сервер ассистента недоступен.");
-        setReplying(false);
-        return;
-      }
-
-      // показать ответ
-      push("assistant", data.reply);
-
-      // обновить сигналы
-      setSignals((prev) => ({
-        city: data.signals?.city || prev.city,
-        exp: data.signals?.exp || prev.exp,
-        format: data.signals?.format || prev.format,
-      }));
-
-      // если финал — показать счёт и записать отклик
-      if (typeof data.final_score === "number" && data.next_action === "finish") {
-        setFinalScore(data.final_score);
-        saveApplication(data.final_score);
-        push("assistant", `Итоговая релевантность: ${data.final_score}%`);
-      }
-    } catch (e) {
-      push("assistant", "Произошла ошибка соединения.");
-    } finally {
-      setReplying(false);
-    }
+  // ====== Автоформула релевантности (0..100) ======
+  function parseYears(text) {
+    if (!text) return 0;
+    const m = String(text).match(/(\d+(\.\d+)?)/);
+    return m ? Number(m[1]) : 0;
   }
 
-  function saveApplication(score) {
+  function scoreKeywordMatch(candidate, job) {
+    const jt = (job.title || "").toLowerCase();
+    const pf = (candidate.profession || "").toLowerCase();
+    if (!jt || !pf) return 0;
+    let s = 0;
+    if (pf.includes(jt) || jt.includes(pf)) s += 40;
+    const keywords = jt.split(/\W+/).filter(Boolean);
+    let matches = 0;
+    for (const k of keywords) if (pf.includes(k)) matches++;
+    s += Math.min(30, matches * 6);
+    return s;
+  }
+
+  function computeAutoScore(candidate, job) {
+    let score = 50;
+
+    // Город
+    if (candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase()) score += 15;
+
+    // Профессия / ключевые слова
+    score += scoreKeywordMatch(candidate, job);
+
+    // Опыт
+    const candYears = parseYears(candidate.experience);
+    let requiredYears = 0;
+    if (job.exp) {
+      const m = String(job.exp).match(/(\d+)/);
+      if (m) requiredYears = Number(m[1]);
+      else if (/senior/i.test(job.exp)) requiredYears = 5;
+      else if (/middle\+?/i.test(job.exp)) requiredYears = 3;
+      else if (/middle/i.test(job.exp)) requiredYears = 2;
+      else if (/junior/i.test(job.exp)) requiredYears = 0.5;
+    }
+    if (requiredYears > 0) {
+      if (candYears >= requiredYears) score += 15;
+      else score -= Math.min(20, (requiredYears - candYears) * 6);
+    }
+
+    // Формат (если у кандидата указаны пожелания по формату)
+    if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
+
+    return Math.round(Math.max(0, Math.min(100, score)));
+  }
+
+  // Сохраняем запись для таблицы работодателя
+  function saveApplication(score, candidateParam = null) {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
     const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
-    const candidateName = currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат";
+    const candidateName = candidateParam
+      ? candidateParam.name
+      : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
+    const candidateEmail = candidateParam?.email || currentUser?.email || "";
 
     all.push({
       name: candidateName,
-      email: currentUser?.email || "",
-      city: signals.city, exp: signals.exp, format: signals.format,
+      email: candidateEmail,
+      city: candidateParam?.city || signals.city,
+      exp: candidateParam?.experience || signals.exp,
+      format: signals.format,
       score: Number(score) || 0,
       jobId: job.id, jobTitle: job.title,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
     });
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
+  // Заглушка под диалог с ассистентом, если вернёшься к API позже
   const sendUser = (text) => {
     const v = (text || "").trim();
     if (!v || replying) return;
-    push("user", v);
-    // соберём историю для бэка
-    const hist = [...messages, { role: "user", content: v }]
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => ({ role: m.role, content: m.content }));
-    askGemini(hist);
+    setMessages((arr)=>[...arr, { role:"user", content:v }]);
+    // Здесь можно вызвать askGemini([...])
   };
 
   if (!open) return null;
@@ -602,7 +617,7 @@ function SmartBotModal({ open, onClose, job }) {
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
         <div className="sb-head">
-          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг (Gemini)</div>
+          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг</div>
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
@@ -629,37 +644,39 @@ function SmartBotModal({ open, onClose, job }) {
                 dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}
               />
             ))}
-            {replying && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
+            {replying && !candidate && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
           </div>
 
-          {/* Ввод */}
-          <div className="sb-input">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Введите ответ..."
-              disabled={replying}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const v = e.currentTarget.value;
-                  e.currentTarget.value = "";
+          {/* Ввод — скрываем, если это автоматическая оценка кандидата */}
+          {!candidate && (
+            <div className="sb-input">
+              <input
+                ref={inputRef}
+                type="text"
+                placeholder="Введите ответ..."
+                disabled={replying}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const v = e.currentTarget.value;
+                    e.currentTarget.value = "";
+                    sendUser(v);
+                  }
+                }}
+              />
+              <button
+                disabled={replying}
+                onClick={() => {
+                  const el = inputRef.current;
+                  const v = el?.value?.trim();
+                  if (!v) return;
+                  el.value = "";
                   sendUser(v);
-                }
-              }}
-            />
-            <button
-              disabled={replying}
-              onClick={() => {
-                const el = inputRef.current;
-                const v = el?.value?.trim();
-                if (!v) return;
-                el.value = "";
-                sendUser(v);
-              }}
-            >
-              Отправить
-            </button>
-          </div>
+                }}
+              >
+                Отправить
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -683,7 +700,6 @@ function SmartBotModal({ open, onClose, job }) {
     </div>
   );
 }
-
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ ========= */
 function EmployerTable() {
@@ -918,6 +934,22 @@ export default function Page() {
                       <button className="btn btn-primary" onClick={()=>{ setCand(c); setCandOpen(true); }}>
                         Предпросмотр
                       </button>
+
+                      {/* НОВОЕ: кнопка авто-оценки SmartBot для работодателя */}
+                      {user?.role === "employer" && (
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => {
+                            // можно внедрить логику выбора конкретной вакансии; для демо — первая
+                            setJob(JOBS[0]);
+                            setCand(c);
+                            setModalOpen(true);
+                          }}
+                        >
+                          Оценить SmartBot
+                        </button>
+                      )}
+
                       {c.email && (
                         <a className="btn btn-outline" href={`mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent("Предложение сотрудничества")}`}>
                           Написать
@@ -935,7 +967,12 @@ export default function Page() {
       </div>
 
       {/* Модалки */}
-      <SmartBotModal open={modalOpen} job={job} onClose={()=>setModalOpen(false)} />
+      <SmartBotModal
+        open={modalOpen}
+        job={job}
+        candidate={cand}
+        onClose={() => { setModalOpen(false); setCand(null); }}
+      />
       <AuthModal open={authOpen} onClose={()=>setAuthOpen(false)} onAuth={(u)=>{ setUser(u); if(u.role==="applicant") setView("jobs"); }} />
       <CandidatePreview open={candOpen} onClose={()=>setCandOpen(false)} candidate={cand} />
       <AddCandidateModal
