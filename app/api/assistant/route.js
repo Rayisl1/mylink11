@@ -4,36 +4,41 @@ export const runtime = "edge";
 const MODEL = "gemini-2.5-flash"; // быстрая актуальная модель Gemini
 
 const SYSTEM_PROMPT = `
-Ты — виртуальный HR-представитель компании. Тебя зовут Нурислам Алдабергенулы
-Отвечай на любом языке , вежливо и профессионально.
-Твоя цель — помогать кандидату во всём, что связано с компанией, вакансией и процессом трудоустройства.
+Ты — виртуальный HR-представитель компании.
+Отвечай по-русски, вежливо и профессионально.
+Твоя цель — помочь кандидату разобраться во всём, что связано с вакансией, компанией и процессом трудоустройства,
+а также собрать ключевую информацию о кандидате.
 
-Можно отвечать на вопросы о:
-- компании (миссия, культура, преимущества);
-- вакансии (обязанности, требования, зарплата, формат);
-- процессе (этапы, сроки, интервью, фидбек);
-- корпоративной жизни (офис, команда, развитие).
+Ты можешь:
+- рассказывать о компании, вакансии, задачах и процессе найма;
+- уточнять у кандидата:
+  • уровень владения английским языком,
+  • желаемый уровень дохода (зарплату),
+  • образование (уровень, специальность, учебное заведение),
+  • другие релевантные детали для найма (город, формат, опыт).
 
-Если вопрос вне темы трудоустройства — вежливо предложи вернуться к теме.
+Всегда задавай **один уточняющий вопрос за раз**.
+Не пиши длинных текстов. Отвечай дружелюбно, профессионально и кратко (1–3 предложения).
 
-Формат ответа СТРОГО ТОЛЬКО в виде JSON (без пояснений, без markdown):
+Если вопрос не связан с работой или компанией — вежливо предложи вернуться к теме трудоустройства.
+
+Формат ответа СТРОГО ТОЛЬКО в виде JSON (без markdown и пояснений):
 {
-  "reply": "краткий ответ бота (1–3 предложения)",
+  "reply": "фраза бота пользователю",
   "next_action": "ask" | "finish"
 }
 
 Правила:
-- Никаких оценок, процентов, баллов — не добавлять.
-- Не использовать поля "final_score" или "signals".
-- Если информации нет — честно укажи это и предложи уточнить.
+- Не добавляй проценты, оценки или баллы.
+- Не используй поля "final_score" или "signals".
+- Если информации пока не хватает — продолжай задавать вопросы.
+- Когда получено всё нужное (город, опыт, формат, английский, зарплата, образование) — можешь завершить с next_action="finish".
 `;
 
-// Безопасный JSON-парс
 function safeParseJSON(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
-// Утилита ответа
 function j(status, data) {
   return new Response(JSON.stringify(data), {
     status,
@@ -47,24 +52,25 @@ export async function POST(req) {
     if (!apiKey) return j(500, { ok: false, error: "GEMINI_API_KEY is missing" });
 
     const { history = [], vacancy = {}, profile = {} } = await req.json();
-    // history: [{ role: "user" | "assistant", content: "..." }]
 
-    // Короткий контекст для ответов
     const contextBlock = `
 Компания: ${vacancy.company || "-"}
 Вакансия: ${vacancy.title || "-"}
 Город: ${vacancy.city || "-"}
 Формат: ${vacancy.format || "-"}
 Требования/Описание: ${vacancy.description || "-"}
+
 Профиль кандидата:
 - Имя: ${profile.name || "-"}
 - Город: ${profile.city || "-"}
 - Опыт: ${profile.experience || "-"}
 - Профессия: ${profile.profession || "-"}
 - Предпочитаемый формат: ${profile.preferredFormat || "-"}
+- Английский: ${profile.english || "-"}
+- Образование: ${profile.education || "-"}
+- Желаемая зарплата: ${profile.salary || "-"}
 `.trim();
 
-    // История диалога в формате Gemini
     const contents = [];
     for (const m of history) {
       contents.push({
@@ -73,7 +79,6 @@ export async function POST(req) {
       });
     }
 
-    // Если история пустая — инициируем диалог
     if (history.length === 0) {
       contents.push({
         role: "user",
@@ -81,7 +86,6 @@ export async function POST(req) {
       });
     }
 
-    // Рекомендуемый способ — systemInstruction отдельно
     const bodyPayload = {
       systemInstruction: { parts: [{ text: SYSTEM_PROMPT + "\n\n" + contextBlock }] },
       contents,
@@ -107,7 +111,6 @@ export async function POST(req) {
       return j(r.status, { ok: false, error: data?.error?.message || "Gemini error" });
     }
 
-    // Извлекаем текст модели
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ??
       data?.candidates?.[0]?.content?.parts?.[0]?.functionCall?.argsText ??
@@ -115,7 +118,6 @@ export async function POST(req) {
 
     const parsed = safeParseJSON(text);
 
-    // Валидация формата
     const isValid =
       parsed &&
       typeof parsed === "object" &&
@@ -123,17 +125,15 @@ export async function POST(req) {
       (parsed.next_action === "ask" || parsed.next_action === "finish");
 
     if (!isValid) {
-      // Фоллбек на случай нарушения формата
       return j(200, {
         ok: true,
         reply:
-          "Извините, не распознал формат ответа. Могу помочь с вопросами о вакансии, компании и процессе. Что именно вас интересует?",
+          "Извините, не распознал формат ответа. Расскажите, пожалуйста, какой у вас уровень английского и желаемая зарплата?",
         next_action: "ask",
         raw: text,
       });
     }
 
-    // Успешный ответ без каких-либо процентов/оценок
     return j(200, {
       ok: true,
       reply: parsed.reply,
