@@ -83,7 +83,7 @@ function AuthModal({ open, onClose, onAuth }) {
 
   return (
     <div className="auth-backdrop" role="dialog" aria-modal="true">
-      <div className="auth-modal">
+      <div className="auth-modal modal-lg">
         <div className="auth-head">
           <div className="auth-tabs">
             <button className={clsx("auth-tab", mode === "login" && "active")} onClick={() => setMode("login")}>Вход</button>
