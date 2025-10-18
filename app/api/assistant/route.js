@@ -1,7 +1,7 @@
 // app/api/assistant/route.js
 export const runtime = "edge";
 
-const MODEL = "gemini-1.5-flash"; // быстро и дешево; можно заменить на gemini-1.5-pro
+const MODEL = "gemini-2.5-flash"; // быстро и дешево; можно заменить на gemini-1.5-pro
 
 const SYSTEM_PROMPT = `
 Ты — HR-менеджер. Веди скрининг кандидата по-русски, дружелюбно и профессионально.
