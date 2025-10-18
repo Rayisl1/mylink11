@@ -1,13 +1,18 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-/* ========= ДАННЫЕ ДЛЯ КАРТОЧЕК ========= */
+/* ========= ДАННЫЕ ДЛЯ КАРТОЧЕК (РАСШИРЕНО) ========= */
 const JOBS = [
-  { id: 1, title: "Менеджер по продажам", city: "Алматы", exp: "от 2 лет", format: "Полный день", salary: "от 300 000 ₸" },
-  { id: 2, title: "Маркетолог Performance", city: "Астана", exp: "от 3 лет", format: "Гибрид", salary: "от 600 000 ₸" },
-  { id: 3, title: "UI/UX Дизайнер", city: "Шымкент", exp: "от 2 лет", format: "Гибрид", salary: "" },
-  { id: 4, title: "Backend Developer (Node.js)", city: "Алматы", exp: "Middle+", format: "Full Remote", salary: "" },
-  { id: 5, title: "Product Manager", city: "Астана", exp: "Senior", format: "Офис", salary: "" }
+  { id: 1,  title: "Менеджер по продажам",            city: "Алматы",  exp: "от 2 лет",   format: "Полный день",  salary: "от 300 000 ₸" },
+  { id: 2,  title: "Маркетолог Performance",           city: "Астана",  exp: "от 3 лет",   format: "Гибрид",       salary: "от 600 000 ₸" },
+  { id: 3,  title: "UI/UX Дизайнер",                   city: "Шымкент", exp: "от 2 лет",   format: "Гибрид",       salary: "" },
+  { id: 4,  title: "Backend Developer (Node.js)",      city: "Алматы",  exp: "Middle+",    format: "Full Remote",  salary: "" },
+  { id: 5,  title: "Product Manager",                  city: "Астана",  exp: "Senior",     format: "Офис",         salary: "" },
+  { id: 6,  title: "Frontend Developer (React)",       city: "Алматы",  exp: "Middle",     format: "Гибрид",       salary: "до 900 000 ₸" },
+  { id: 7,  title: "Data Analyst",                     city: "Астана",  exp: "от 1 года",  format: "Полный день",  salary: "" },
+  { id: 8,  title: "SMM-специалист",                   city: "Алматы",  exp: "Junior+",    format: "Гибрид",       salary: "" },
+  { id: 9,  title: "QA Engineer",                      city: "Караганда",exp: "Middle",    format: "Полный день",  salary: "" },
+  { id:10,  title: "HR Generalist",                    city: "Алматы",  exp: "от 2 лет",   format: "Офис",         salary: "" },
 ];
 
 /* ========= ВСПОМОГАТЕЛЬНОЕ ========= */
@@ -15,7 +20,118 @@ const clsx = (...xs) => xs.filter(Boolean).join(" ");
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
-/* ========= SMARTBOT МОДАЛ ========= */
+/* ========= АУТЕНТИФИКАЦИЯ (ЛОКАЛЬНО) ========= */
+function AuthModal({ open, onClose, onAuth }) {
+  const [mode, setMode] = useState("login"); // 'login' | 'register'
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setMode("login");
+    setName("");
+    setEmail("");
+    setPass("");
+    setError("");
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    setError("");
+
+    const users = JSON.parse(localStorage.getItem("jb_users") || "{}"); // email -> {name, email, passHash}
+    const hash = btoa(pass); // простейший псевдохэш для демо
+
+    if (mode === "register") {
+      if (!name.trim()) return setError("Введите имя");
+      if (!email.includes("@")) return setError("Неверный email");
+      if (pass.length < 4) return setError("Минимум 4 символа в пароле");
+      if (users[email]) return setError("Пользователь уже существует");
+
+      users[email] = { name: name.trim(), email, passHash: hash };
+      localStorage.setItem("jb_users", JSON.stringify(users));
+      localStorage.setItem("jb_current", JSON.stringify({ name: name.trim(), email }));
+      onAuth({ name: name.trim(), email });
+      onClose();
+      return;
+    }
+
+    // login
+    if (!users[email] || users[email].passHash !== hash) {
+      return setError("Неверный email или пароль");
+    }
+    localStorage.setItem("jb_current", JSON.stringify({ name: users[email].name, email }));
+    onAuth({ name: users[email].name, email });
+    onClose();
+  };
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true">
+      <div className="auth-modal">
+        <div className="auth-head">
+          <div className="auth-tabs">
+            <button className={clsx("auth-tab", mode === "login" && "active")} onClick={() => setMode("login")}>
+              Вход
+            </button>
+            <button className={clsx("auth-tab", mode === "register" && "active")} onClick={() => setMode("register")}>
+              Регистрация
+            </button>
+          </div>
+          <button className="auth-close" onClick={onClose}>×</button>
+        </div>
+
+        <form className="auth-body" onSubmit={submit}>
+          {mode === "register" && (
+            <div className="field">
+              <label>Имя</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Иван" />
+            </div>
+          )}
+          <div className="field">
+            <label>Email</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.kz" />
+          </div>
+          <div className="field">
+            <label>Пароль</label>
+            <input type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="••••" />
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+
+          <button className="btn btn-primary" type="submit" style={{ width: "100%", marginTop: 8 }}>
+            {mode === "login" ? "Войти" : "Зарегистрироваться"}
+          </button>
+
+          <div className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+            Демоверсия: данные хранятся только в вашем браузере.
+          </div>
+        </form>
+      </div>
+
+      <style jsx global>{`
+        .auth-backdrop{position:fixed;inset:0;background:rgba(2,8,23,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+        .auth-modal{width:min(480px,94vw);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
+        .auth-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f1f5f9;border-bottom:1px solid var(--line)}
+        [data-theme="dark"] .auth-head{background:#0b1424}
+        .auth-tabs{display:flex;gap:8px}
+        .auth-tab{border:none;background:transparent;padding:8px 10px;border-radius:10px;cursor:pointer;font-weight:600;color:var(--muted)}
+        .auth-tab.active{color:var(--text);background:rgba(37,99,235,.08)}
+        .auth-close{border:none;background:transparent;font-size:22px;cursor:pointer;color:#475569}
+        .auth-body{padding:16px}
+        .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+        .field label{font-size:13px;color:var(--muted)}
+        .field input{padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:var(--text)}
+        .auth-error{color:#ef4444;background:#fef2f2;border:1px solid #fecaca;padding:8px 10px;border-radius:10px;font-size:13px;margin-bottom:8px}
+      `}</style>
+    </div>
+  );
+}
+
+/* ========= SMARTBOT МОДАЛ (из твоего кода, без изменений) ========= */
 function SmartBotModal({ open, onClose, job }) {
   const [step, setStep] = useState(0);
   const [candidate, setCandidate] = useState({ name: "", city: "", exp: "", format: "" });
@@ -23,18 +139,11 @@ function SmartBotModal({ open, onClose, job }) {
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  const push = (sender, html) => {
-    setMessages((arr) => [...arr, { sender, html }]);
-  };
+  const push = (sender, html) => setMessages((arr) => [...arr, { sender, html }]);
 
   const setQuick = (labels) =>
     labels.map((label) => (
-      <button
-        key={label}
-        className="sb-quick-btn"
-        onClick={() => handleUser(label)}
-        type="button"
-      >
+      <button key={label} className="sb-quick-btn" onClick={() => handleUser(label)} type="button">
         {label}
       </button>
     ));
@@ -81,7 +190,7 @@ function SmartBotModal({ open, onClose, job }) {
     });
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
 
-    setStep(999); // свободный режим
+    setStep(999);
   };
 
   const handleUser = (text) => {
@@ -89,33 +198,16 @@ function SmartBotModal({ open, onClose, job }) {
     if (!v) return;
     push("user", esc(v));
 
-    if (step === 0) {
-      setCandidate((c) => ({ ...c, name: v }));
-      setStep(1);
-      return;
-    }
-    if (step === 1) {
-      setCandidate((c) => ({ ...c, city: normalize(v) }));
-      setStep(2);
-      return;
-    }
-    if (step === 2) {
-      setCandidate((c) => ({ ...c, exp: normalize(v) }));
-      setStep(3);
-      return;
-    }
-    if (step === 3) {
-      setCandidate((c) => ({ ...c, format: normalize(v) }));
-      setStep(4);
-      return;
-    }
+    if (step === 0) { setCandidate((c) => ({ ...c, name: v })); setStep(1); return; }
+    if (step === 1) { setCandidate((c) => ({ ...c, city: normalize(v) })); setStep(2); return; }
+    if (step === 2) { setCandidate((c) => ({ ...c, exp: normalize(v) })); setStep(3); return; }
+    if (step === 3) { setCandidate((c) => ({ ...c, format: normalize(v) })); setStep(4); return; }
 
-    // оффлайн-ответы в демо (без сервера)
     const canned = [
       "Принято! Передам рекрутеру.",
       "Готов ответить на любые уточняющие вопросы.",
       "График: будни, с 10:00 до 19:00; испытательный срок 2 месяца.",
-      "План продаж и CRM — предоставим при онбординге."
+      "План продаж и CRM — предоставим при онбординге.",
     ];
     push("bot", canned[Math.floor(Math.random() * canned.length)]);
   };
@@ -127,15 +219,8 @@ function SmartBotModal({ open, onClose, job }) {
     setMessages([]);
   }, [open, job?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-    ask();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, open]);
-
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { if (open) ask(); }, [step, open]);
+  useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" }); }, [messages]);
 
   if (!open) return null;
 
@@ -149,11 +234,8 @@ function SmartBotModal({ open, onClose, job }) {
         <div className="sb-body">
           <div className="sb-messages" ref={listRef}>
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={clsx(m.sender === "bot" ? "sb-bot" : "sb-user")}
-                dangerouslySetInnerHTML={{ __html: `<b>${m.sender === "bot" ? "SmartBot" : "Вы"}:</b> ${m.html}` }}
-              />
+              <div key={i} className={clsx(m.sender === "bot" ? "sb-bot" : "sb-user")}
+                dangerouslySetInnerHTML={{ __html: `<b>${m.sender === "bot" ? "SmartBot" : "Вы"}:</b> ${m.html}` }} />
             ))}
           </div>
           <div className="sb-input">
@@ -169,27 +251,20 @@ function SmartBotModal({ open, onClose, job }) {
                 }
               }}
             />
-            <button
-              onClick={() => {
-                const el = inputRef.current;
-                const v = el?.value?.trim();
-                if (!v) return;
-                el.value = "";
-                handleUser(v);
-              }}
-            >
+            <button onClick={() => {
+              const el = inputRef.current;
+              const v = el?.value?.trim();
+              if (!v) return;
+              el.value = "";
+              handleUser(v);
+            }}>
               Отправить
             </button>
           </div>
-
-          {/* Быстрые кнопки (рендерятся в ask()) */}
-          <div className="sb-quick">
-            {[1, 2, 3].includes(step) ? setQuick(["Да", "Нет"]) : null}
-          </div>
+          <div className="sb-quick">{[1, 2, 3].includes(step) ? setQuick(["Да", "Нет"]) : null}</div>
         </div>
       </div>
 
-      {/* Стили модалки локально */}
       <style jsx global>{`
         .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
         .sb-modal{width:min(720px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
@@ -225,21 +300,14 @@ function EmployerTable() {
     setRows(data);
   };
 
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const exportCSV = () => {
-    if (!rows.length) {
-      alert("Нет данных для экспорта");
-      return;
-    }
+    if (!rows.length) return alert("Нет данных для экспорта");
     const headers = ["name", "city", "exp", "format", "score", "jobId", "jobTitle", "date"];
     const lines = [headers.join(",")];
     rows.forEach((o) => {
-      const row = headers
-        .map((k) => `"${(o[k] ?? "").toString().replace(/"/g, '""')}"`)
-        .join(",");
+      const row = headers.map((k) => `"${(o[k] ?? "").toString().replace(/"/g, '""')}"`).join(",");
       lines.push(row);
     });
     const csv = lines.join("\n");
@@ -247,18 +315,14 @@ function EmployerTable() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    a.href = url;
-    a.download = `smartbot_candidates_${ts}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = `smartbot_candidates_${ts}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const clearAll = () => {
     if (!confirm("Удалить все сохранённые отклики?")) return;
-    localStorage.removeItem("smartbot_candidates");
-    load();
+    localStorage.removeItem("smartbot_candidates"); load();
   };
 
   const tone = (score) => (score >= 80 ? "b-good" : score >= 60 ? "b-warn" : "b-bad");
@@ -275,12 +339,7 @@ function EmployerTable() {
         <table className="table">
           <thead>
             <tr>
-              <th>Имя</th>
-              <th>Вакансия</th>
-              <th>Релевантность</th>
-              <th>Индикатор</th>
-              <th>Ответы</th>
-              <th>Дата</th>
+              <th>Имя</th><th>Вакансия</th><th>Релевантность</th><th>Индикатор</th><th>Ответы</th><th>Дата</th>
             </tr>
           </thead>
           <tbody>
@@ -295,28 +354,20 @@ function EmployerTable() {
               <tr key={i}>
                 <td>{esc(r.name)}</td>
                 <td>{esc(r.jobTitle || "")}</td>
-                <td>
-                  <span className={clsx("badge", tone(Number(r.score) || 0))}>
-                    {Number(r.score) || 0}%
-                  </span>
-                </td>
+                <td><span className={clsx("badge", tone(Number(r.score) || 0))}>{Number(r.score) || 0}%</span></td>
                 <td>
                   <div style={{ height: 8, background: "var(--line)", borderRadius: 999, overflow: "hidden", width: 140 }}>
-                    <div
-                      style={{
-                        height: 8,
-                        width: `${Math.max(0, Math.min(100, Number(r.score) || 0))}%`,
-                        background: "#60a5fa"
-                      }}
-                    />
+                    <div style={{
+                      height: 8,
+                      width: `${Math.max(0, Math.min(100, Number(r.score) || 0))}%`,
+                      background: "#60a5fa"
+                    }} />
                   </div>
                 </td>
                 <td style={{ color: "var(--muted)", fontSize: 13 }}>
                   город: {esc(r.city || "-")}; опыт: {esc(r.exp || "-")}; формат: {esc(r.format || "-")}
                 </td>
-                <td style={{ fontSize: 12, color: "var(--muted)" }}>
-                  {new Date(r.date).toLocaleString()}
-                </td>
+                <td style={{ fontSize: 12, color: "var(--muted)" }}>{new Date(r.date).toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
@@ -332,11 +383,16 @@ export default function Page() {
   const [view, setView] = useState("jobs");
   const [modalOpen, setModalOpen] = useState(false);
   const [job, setJob] = useState(JOBS[0]);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme") || "light";
-    setTheme(saved);
-    document.body.setAttribute("data-theme", saved);
+    const savedTheme = localStorage.getItem("theme") || "light";
+    setTheme(savedTheme);
+    document.body.setAttribute("data-theme", savedTheme);
+
+    const cur = localStorage.getItem("jb_current");
+    if (cur) try { setUser(JSON.parse(cur)); } catch {}
   }, []);
 
   const switchTheme = () => {
@@ -346,9 +402,11 @@ export default function Page() {
     localStorage.setItem("theme", next);
   };
 
-  const openSmartBot = (j) => {
-    setJob(j);
-    setModalOpen(true);
+  const openSmartBot = (j) => { setJob(j); setModalOpen(true); };
+
+  const logout = () => {
+    localStorage.removeItem("jb_current");
+    setUser(null);
   };
 
   return (
@@ -358,19 +416,23 @@ export default function Page() {
         <div className="header-inner">
           <div className="logo">JobBoard</div>
           <div className="nav">
-            <button
-              className={clsx(view === "jobs" && "active")}
-              onClick={() => setView("jobs")}
-            >
-              Вакансии
-            </button>
-            <button
-              className={clsx(view === "employer" && "active")}
-              onClick={() => setView("employer")}
-            >
-              Работодатель
-            </button>
+            <button className={clsx(view === "jobs" && "active")} onClick={() => setView("jobs")}>Вакансии</button>
+            <button className={clsx(view === "employer" && "active")} onClick={() => setView("employer")}>Работодатель</button>
             <button onClick={switchTheme} title="Светлая/тёмная тема">Тема</button>
+
+            {/* Блок пользователя */}
+            {!user ? (
+              <button className="btn btn-outline" onClick={() => setAuthOpen(true)}>Войти</button>
+            ) : (
+              <div className="userbox">
+                <div className="avatar">{user.name?.slice(0,1)?.toUpperCase() || "U"}</div>
+                <div className="uinfo">
+                  <div className="uname">{user.name}</div>
+                  <div className="umail">{user.email}</div>
+                </div>
+                <button className="btn btn-outline" onClick={logout}>Выход</button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -389,8 +451,8 @@ export default function Page() {
         {view === "jobs" && (
           <section>
             <div className="grid">
-              {JOBS.slice(0, 2).map((j) => (
-                <article className="card col-6" key={j.id}>
+              {JOBS.map((j, idx) => (
+                <article className={clsx("card", idx < 2 ? "col-6" : "col-4")} key={j.id}>
                   <h3 className="title">{j.title}</h3>
                   <div className="meta">
                     <span className="pill">{j.city}</span>
@@ -399,26 +461,12 @@ export default function Page() {
                     {j.salary && <span className="pill">{j.salary}</span>}
                   </div>
                   <div className="row">
-                    <div><strong>Обязанности:</strong> работа с лидами, звонки, CRM</div>
-                    <div><strong>Требования:</strong> уверенная речь, дисциплина</div>
+                    <div><strong>Обязанности:</strong> коммуникация, отчётность, качественная работа в команде</div>
+                    <div><strong>Требования:</strong> дисциплина, обучаемость, ответственность</div>
                   </div>
                   <div className="actions">
                     <button className="btn btn-primary" onClick={() => openSmartBot(j)}>Откликнуться</button>
                     <button className="btn btn-outline" onClick={() => openSmartBot(j)}>Быстрый отклик</button>
-                  </div>
-                </article>
-              ))}
-
-              {JOBS.slice(2).map((j) => (
-                <article className="card col-4" key={j.id}>
-                  <h3 className="title">{j.title}</h3>
-                  <div className="meta">
-                    <span className="pill">{j.city}</span>
-                    <span className="pill">{j.exp}</span>
-                    <span className="pill">{j.format}</span>
-                  </div>
-                  <div className="actions">
-                    <button className="btn btn-primary" onClick={() => openSmartBot(j)}>Откликнуться</button>
                   </div>
                 </article>
               ))}
@@ -439,11 +487,12 @@ export default function Page() {
           </section>
         )}
 
-        <p className="foot">© 2025 JobBoard Demo. Данные не отправляются на сервер и остаются в вашем браузере.</p>
+        <p className="foot">© 2025 JobBoard Demo. Данные авторизации и отклики хранятся только в вашем браузере (localStorage).</p>
       </div>
 
-      {/* SmartBot modal */}
+      {/* Модалки */}
       <SmartBotModal open={modalOpen} job={job} onClose={() => setModalOpen(false)} />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} onAuth={setUser} />
 
       {/* Глобальные стили страницы */}
       <style jsx global>{`
@@ -469,9 +518,15 @@ export default function Page() {
         [data-theme="dark"] .header{background:rgba(15,23,42,.8)}
         .header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:16px;padding:12px 24px}
         .logo{font-weight:700}
-        .nav{margin-left:auto;display:flex;gap:10px}
+        .nav{margin-left:auto;display:flex;gap:10px;align-items:center}
         .nav button{font-size:14px;color:var(--muted);border:none;background:transparent;padding:8px 10px;border-radius:10px;cursor:pointer}
         .nav button.active{color:var(--text);background:rgba(37,99,235,.08)}
+        .userbox{display:flex;align-items:center;gap:10px;margin-left:8px}
+        .avatar{width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#0f172a;display:flex;align-items:center;justify-content:center;font-weight:700}
+        [data-theme="dark"] .avatar{background:#1e293b;color:#e5efff}
+        .uinfo{display:flex;flex-direction:column;line-height:1}
+        .uname{font-weight:600;font-size:13px}
+        .umail{font-size:12px;color:var(--muted)}
         /* Hero */
         .hero{display:flex;align-items:center;justify-content:space-between;gap:20px;margin:24px 0}
         .hero h1{margin:0 0 6px 0;font-size:28px}
