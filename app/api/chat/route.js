@@ -1,39 +1,66 @@
-export const runtime = "edge";
+export const runtime = "edge"; // Оставляем Edge
+
+async function makeJson(status, obj) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+// ВРЕМЕННО: GET вернёт состояние ключа и роута (для проверки)
+export async function GET() {
+  const hasKey = !!process.env.OPENAI_API_KEY;
+  return makeJson(200, {
+    ok: true,
+    route: "/api/chat",
+    runtime: "edge",
+    hasKey,                // Должно быть true
+    hint: hasKey ? "Ключ доступен. Сделай POST для запроса к модели." : "Ключа нет: добавь OPENAI_API_KEY в Vercel и Redeploy.",
+  });
+}
 
 export async function POST(req) {
   try {
-    const { messages, job } = await req.json();
+    const { messages = [], job = {} } = await req.json();
 
-    // пример интеграции с провайдером ИИ (OpenAI совместимый эндпоинт)
-    const apiKey = process.env.OPENAI_API_KEY; // добавишь в Vercel → Project → Settings → Environment Variables
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "API key missing" }), { status: 500 });
-    }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return makeJson(500, { error: "API key missing (OPENAI_API_KEY)" });
 
+    // Модель: если не уверен, начни с широко доступной
     const payload = {
-      model: "gpt-4o-mini", // или твой провайдер/модель
+      model: "gpt-4o",        // Можно сменить на "gpt-4o-mini" или "gpt-3.5-turbo"
       messages: [
-        { role: "system", content: `Ты ассистент по вакансиям. Вакансия: ${job?.title||""}. Отвечай кратко и по делу.` },
-        ...(messages||[])
+        { role: "system", content: `Ты ассистент по вакансиям. Вакансия: ${job?.title || ""}. Отвечай кратко и по делу.` },
+        ...messages,
       ],
-      temperature: 0.3
+      temperature: 0.3,
     };
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type":"application/json", "Authorization": `Bearer ${apiKey}` },
-      body: JSON.stringify(payload)
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
     });
 
-    if(!res.ok){
-      const t = await res.text();
-      return new Response(JSON.stringify({ error: t.slice(0,500) }), { status: 500 });
+    // Явно прокидываем тексты ошибок из OpenAI
+    const text = await res.text();
+    if (!res.ok) {
+      // Попробуем распарсить JSON из текста
+      let parsed;
+      try { parsed = JSON.parse(text); } catch {}
+      return makeJson(res.status, {
+        error: parsed?.error?.message || text.slice(0, 500),
+        status: res.status,
+      });
     }
-    const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content || "…";
 
-    return new Response(JSON.stringify({ reply }), { status: 200, headers: { "Content-Type":"application/json" }});
+    const data = JSON.parse(text);
+    const reply = data.choices?.[0]?.message?.content || "…";
+    return makeJson(200, { reply });
   } catch (e) {
-    return new Response(JSON.stringify({ error: e.message }), { status: 500 });
+    return makeJson(500, { error: e.message || String(e) });
   }
 }
