@@ -477,7 +477,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
         <div className="sb-head">
-          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг</div>
+          <div className="sb-title" id="sb-title">🤖HR - manager</div>
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
@@ -791,7 +791,7 @@ export default function Page() {
               : "Смотрите карточки соискателей, открывайте резюме и изучайте опыт. Работодатели могут добавлять новых соискателей."}
             </p>
           </div>
-          <div className="pill">Демо-версия (фронтенд only)</div>
+          <div className="pill">Демо-версия from SE40</div>
         </section>
 
         {/* === Найти работу === */}
