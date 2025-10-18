@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/* ========= ДАННЫЕ: вакансии ========= */
-const JOBS = [
+/* ========= ВАКАНСИИ (seed) ========= */
+const SEED_JOBS = [
   { id: 1,  title: "Менеджер по продажам",            city: "Алматы",    exp: "от 2 лет",   format: "Полный день",  salary: "от 300 000 ₸" },
   { id: 2,  title: "Маркетолог Performance",           city: "Астана",    exp: "от 3 лет",   format: "Гибрид",       salary: "от 600 000 ₸" },
   { id: 3,  title: "UI/UX Дизайнер",                   city: "Шымкент",   exp: "от 2 лет",   format: "Гибрид",       salary: "" },
@@ -19,23 +19,85 @@ const JOBS = [
 
 /* ========= ДЕМО-СОИСКАТЕЛИ ========= */
 const SEED_CANDIDATES = [
-  { id:"c1", name:"Darkhan Serikbay", profession:"Research Assistant — Social Robotics / Full-Stack Trainee", desiredSalary:"от 400 000 ₸", country:"Казахстан", city:"Астана", experience:"1 год 1 месяц", email:"aruzhan@example.com", resumeUrl:"#", work:[{period:"авг 2025 — наст. время", company:"HRI Lab at Nazarbayev University", title:"Research Assistant – Social Robotics Projects"},{period:"апр 2025 — наст. время", company:"NU ACM Student Chapter", title:"Vice Chair – ACM-W Student Chapter"},{period:"июн 2025 — авг 2025", company:"nFactorial Incubator", title:"Full-Stack Development Trainee"},{period:"июн 2025 — авг 2025", company:"Novators LLP", title:"Software Development Intern"}], education:[{degree:"Бакалавр", place:"Nazarbayev University", field:"Computer Science"}]},
-  { id:"c2", name:"Bakhtiyar Koishin", profession:"Frontend Developer (React/Next.js)", desiredSalary:"от 800 000 ₸", country:"Казахстан", city:"Алматы", experience:"3 года", email:"dias.front@example.com", resumeUrl:"#", work:[{period:"2023 — 2025", company:"FinTech KZ", title:"Frontend Developer (React, Next.js, Tailwind)"},{period:"2022 — 2023", company:"Retail Cloud", title:"Junior Frontend Developer"}], education:[{degree:"Бакалавр", place:"SDU", field:"Information Systems"}]},
-  { id:"c3", name:"Nurislam Aldabergenuly", profession:"HR Generalist", desiredSalary:"от 1 000 000 ₸", country:"Казахстан", city:"Караганда", experience:"2+ года", email:"nurss.aldb@gmail.com", resumeUrl:"#", work:[{period:"2024 — 2025", company:"TechStart", title:"HR Generalist"},{period:"2023 — 2024", company:"MarketLab", title:"HR Specialist"}], education:[{degree:"Бакалавр", place:"ENU", field:"Психология"}]},
-  { id:"c4", name:"Islam Turganbay", profession:"Backend Developer (Node.js/NestJS)", desiredSalary:"от 900 000 ₸", country:"Казахстан", city:"Астана", experience:"4 года", email:"maksat.backend@example.com", resumeUrl:"#", work:[{period:"2022 — 2025", company:"Gov Digital", title:"Backend Engineer (Node.js, PostgreSQL, Redis)"},{period:"2020 — 2022", company:"ERP Systems", title:"Software Engineer"}], education:[{degree:"Бакалавр", place:"ENU", field:"Информатика"}]},
-  { id:"c5", name:"Elina Karim", profession:"UI/UX Designer", desiredSalary:"от 600 000 ₸", country:"Казахстан", city:"Алматы", experience:"2 года", email:"elina.uiux@example.com", resumeUrl:"#", work:[{period:"2023 — 2025", company:"E-comm Group", title:"Product Designer"},{period:"2022 — 2023", company:"Creative Studio", title:"Junior UI/UX Designer"}], education:[{degree:"Бакалавр", place:"KBTU", field:"Digital Design"}]},
-  { id:"c6", name:"Nurlan Seitov", profession:"DevOps Engineer (AWS/K8s)", desiredSalary:"от 1 200 000 ₸", country:"Казахстан", city:"Алматы", experience:"5 лет", email:"nurlan.devops@example.com", resumeUrl:"#", work:[{period:"2021 — 2025", company:"CloudOps KZ", title:"DevOps Engineer"},{period:"2019 — 2021", company:"MediaTech", title:"SysAdmin → DevOps"}], education:[{degree:"Бакалавр", place:"IITU", field:"Computer Engineering"}]},
-  { id:"c7", name:"Dana Kudaibergen", profession:"Data Analyst / BI", desiredSalary:"от 700 000 ₸", country:"Казахстан", city:"Астана", experience:"2 года", email:"dana.bi@example.com", resumeUrl:"#", work:[{period:"2023 — 2025", company:"Retail Analytics", title:"Data Analyst (SQL, Power BI, Python)"}], education:[{degree:"Бакалавр", place:"NU", field:"Mathematics"}]},
-  { id:"c8", name:"Adil Rakhim", profession:"SMM / Content", desiredSalary:"от 350 000 ₸", country:"Казахстан", city:"Алматы", experience:"1.5 года", email:"adil.smm@example.com", resumeUrl:"#", work:[{period:"2024 — 2025", company:"Fashion Hub", title:"SMM Specialist"},{period:"2023 — 2024", company:"Startup Media", title:"Content Creator"}], education:[{degree:"Бакалавр", place:"KazNU", field:"Журналистика"}]},
-  { id:"c9", name:"Aruzhan Yesen", profession:"QA Engineer", desiredSalary:"от 600 000 ₸", country:"Казахстан", city:"Караганда", experience:"3 года", email:"aruzhan.qa@example.com", resumeUrl:"#", work:[{period:"2022 — 2025", company:"MobileSoft", title:"QA Engineer (Manual+API, Postman)"}], education:[{degree:"Бакалавр", place:"KarSU", field:"CS"}]},
-  { id:"c10", name:"Samat Alimov", profession:"Product Manager", desiredSalary:"от 1 000 000 ₸", country:"Казахстан", city:"Астана", experience:"4+ года", email:"samat.pm@example.com", resumeUrl:"#", work:[{period:"2023 — 2025", company:"PayTech", title:"Product Manager"},{period:"2021 — 2023", company:"Marketplace", title:"Associate PM"}], education:[{degree:"Бакалавр", place:"KIMEP", field:"Business & IT"}]},
-  { id:"c11", name:"Aizada Utepova", profession:"HR Generalist / Talent Acquisition", desiredSalary:"от 550 000 ₸", country:"Казахстан", city:"Алматы", experience:"2 года", email:"aizada.hr@example.com", resumeUrl:"#", work:[{period:"2023 — 2025", company:"TechHub", title:"HR Generalist"}], education:[{degree:"Бакалавр", place:"ALMAU", field:"Human Resources"}]},
-  { id:"c12", name:"Timur Bayandin", profession:"Sales Manager (B2B)", desiredSalary:"от 500 000 ₸ + бонус", country:"Казахстан", city:"Алматы", experience:"3+ года", email:"timur.sales@example.com", resumeUrl:"#", work:[{period:"2022 — 2025", company:"SaaS Pro", title:"B2B Sales Manager (CRM, холодные/тёплые лиды)"}], education:[{degree:"Бакалавр", place:"KazGU", field:"Маркетинг"}]},
+  {
+    id: "c1",
+    name: "Darkhan Serikbay",
+    profession: "Research Assistant — Social Robotics / Full-Stack Trainee",
+    desiredSalary: "от 400 000 ₸",
+    country: "Казахстан",
+    city: "Астана",
+    experience: "1 год 1 месяц",
+    email: "aruzhan@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "авг 2025 — наст. время", company: "HRI Lab at Nazarbayev University", title: "Research Assistant – Social Robotics Projects" },
+      { period: "апр 2025 — наст. время", company: "NU ACM Student Chapter", title: "Vice Chair – ACM-W Student Chapter" },
+      { period: "июн 2025 — авг 2025", company: "nFactorial Incubator", title: "Full-Stack Development Trainee" },
+      { period: "июн 2025 — авг 2025", company: "Novators LLP", title: "Software Development Intern" },
+    ],
+    education: [{ degree: "Бакалавр", place: "Nazarbayev University", field: "Computer Science" }],
+  },
+  {
+    id: "c2",
+    name: "Bakhtiyar Koishin",
+    profession: "Frontend Developer (React/Next.js)",
+    desiredSalary: "от 800 000 ₸",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "3 года",
+    email: "dias.front@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2023 — 2025", company: "FinTech KZ", title: "Frontend Developer (React, Next.js, Tailwind)" },
+      { period: "2022 — 2023", company: "Retail Cloud", title: "Junior Frontend Developer" },
+    ],
+    education: [{ degree: "Бакалавр", place: "SDU", field: "Information Systems" }],
+  },
+  {
+    id: "c3",
+    name: "Nurislam Aldabergenuly",
+    profession: "HR Generalist",
+    desiredSalary: "от 1 000 000 ₸",
+    country: "Казахстан",
+    city: "Караганда",
+    experience: "2+ года",
+    email: "nurss.aldb@gmail.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2024 — 2025", company: "TechStart", title: "HR Generalist" },
+      { period: "2023 — 2024", company: "MarketLab", title: "HR Specialist" },
+    ],
+    education: [{ degree: "Бакалавр", place: "ENU", field: "Психология" }],
+  },
+  {
+    id: "c4",
+    name: "Islam Turganbay",
+    profession: "Backend Developer (Node.js/NestJS)",
+    desiredSalary: "от 900 000 ₸",
+    country: "Казахстан",
+    city: "Астана",
+    experience: "4 года",
+    email: "maksat.backend@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2022 — 2025", company: "Gov Digital", title: "Backend Engineer (Node.js, PostgreSQL, Redis)" },
+      { period: "2020 — 2022", company: "ERP Systems", title: "Software Engineer" },
+    ],
+    education: [{ degree: "Бакалавр", place: "ENU", field: "Информатика" }],
+  },
+  { id: "c5", name: "Elina Karim", profession: "UI/UX Designer", desiredSalary: "от 600 000 ₸", country: "Казахстан", city: "Алматы", experience: "2 года", email: "elina.uiux@example.com", resumeUrl: "#", work: [{ period: "2023 — 2025", company: "E-comm Group", title: "Product Designer" }, { period: "2022 — 2023", company: "Creative Studio", title: "Junior UI/UX Designer" }], education: [{ degree: "Бакалавр", place: "KBTU", field: "Digital Design" }]},
+  { id: "c6", name: "Nurlan Seitov", profession: "DevOps Engineer (AWS/K8s)", desiredSalary: "от 1 200 000 ₸", country: "Казахстан", city: "Алматы", experience: "5 лет", email: "nurlan.devops@example.com", resumeUrl: "#", work: [{ period: "2021 — 2025", company: "CloudOps KZ", title: "DevOps Engineer" }, { period: "2019 — 2021", company: "MediaTech", title: "SysAdmin → DevOps" }], education: [{ degree: "Бакалавр", place: "IITU", field: "Computer Engineering" }]},
+  { id: "c7", name: "Dana Kudaibergen", profession: "Data Analyst / BI", desiredSalary: "от 700 000 ₸", country: "Казахстан", city: "Астана", experience: "2 года", email: "dana.bi@example.com", resumeUrl: "#", work: [{ period: "2023 — 2025", company: "Retail Analytics", title: "Data Analyst (SQL, Power BI, Python)" }], education: [{ degree: "Бакалавр", place: "NU", field: "Mathematics" }]},
+  { id: "c8", name: "Adil Rakhim", profession: "SMM / Content", desiredSalary: "от 350 000 ₸", country: "Казахстан", city: "Алматы", experience: "1.5 года", email: "adil.smm@example.com", resumeUrl: "#", work: [{ period: "2024 — 2025", company: "Fashion Hub", title: "SMM Specialist" }, { period: "2023 — 2024", company: "Startup Media", title: "Content Creator" }], education: [{ degree: "Бакалавр", place: "KazNU", field: "Журналистика" }]},
+  { id: "c9", name: "Aruzhan Yesen", profession: "QA Engineer", desiredSalary: "от 600 000 ₸", country: "Казахстан", city: "Караганда", experience: "3 года", email: "aruzhan.qa@example.com", resumeUrl: "#", work: [{ period: "2022 — 2025", company: "MobileSoft", title: "QA Engineer (Manual+API, Postman)" }], education: [{ degree: "Бакалавр", place: "KarSU", field: "CS" }]},
+  { id: "c10", name: "Samat Alimov", profession: "Product Manager", desiredSalary: "от 1 000 000 ₸", country: "Казахстан", city: "Астана", experience: "4+ года", email: "samat.pm@example.com", resumeUrl: "#", work: [{ period: "2023 — 2025", company: "PayTech", title: "Product Manager" }, { period: "2021 — 2023", company: "Marketplace", title: "Associate PM" }], education: [{ degree: "Бакалавр", place: "KIMEP", field: "Business & IT" }]},
+  { id: "c11", name: "Aizada Utepova", profession: "HR Generalist / Talent Acquisition", desiredSalary: "от 550 000 ₸", country: "Казахстан", city: "Алматы", experience: "2 года", email: "aizada.hr@example.com", resumeUrl: "#", work: [{ period: "2023 — 2025", company: "TechHub", title: "HR Generalist" }], education: [{ degree: "Бакалавр", place: "ALMAU", field: "Human Resources" }]},
+  { id: "c12", name: "Timur Bayandin", profession: "Sales Manager (B2B)", desiredSalary: "от 500 000 ₸ + бонус", country: "Казахстан", city: "Алматы", experience: "3+ года", email: "timur.sales@example.com", resumeUrl: "#", work: [{ period: "2022 — 2025", company: "SaaS Pro", title: "B2B Sales Manager (CRM, холодные/тёплые лиды)" }], education: [{ degree: "Бакалавр", place: "KazGU", field: "Маркетинг" }]},
 ];
 
 /* ========= HELPERS ========= */
 const clsx = (...xs) => xs.filter(Boolean).join(" ");
-const esc  = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
 /* ========= AUTH ========= */
 function AuthModal({ open, onClose, onAuth }) {
@@ -135,116 +197,8 @@ function AuthModal({ open, onClose, onAuth }) {
     </div>
   );
 }
-/* ========= МОДАЛКА «ДОБАВИТЬ ВАКАНСИЮ» ========= */
-function AddJobModal({ open, onClose, onAdd }) {
-  const [title, setTitle] = useState("");
-  const [city, setCity] = useState("");
-  const [exp, setExp] = useState("");       // стаж/требуемый опыт
-  const [format, setFormat] = useState(""); // график/формат
-  const [salary, setSalary] = useState("");
-  const [duties, setDuties] = useState("");       // «обязанности»
-  const [requirements, setRequirements] = useState(""); // «требования»
-  const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    setTitle(""); setCity(""); setExp(""); setFormat("");
-    setSalary(""); setDuties(""); setRequirements(""); setError("");
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const submit = (e) => {
-    e.preventDefault();
-    setError("");
-    if (!title.trim()) return setError("Укажите профессию (название вакансии)");
-    if (!city.trim())  return setError("Укажите город");
-
-    onAdd({
-      id: "j_" + Math.random().toString(36).slice(2,9),
-      title: title.trim(),
-      city: city.trim(),
-      exp: exp.trim(),
-      format: format.trim(),
-      salary: salary.trim(),
-      duties: duties.trim(),
-      requirements: requirements.trim(),
-    });
-    onClose();
-  };
-
-  return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addjob-title"
-         onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-shell" role="document">
-        <div className="modal-head">
-          <div className="modal-title" id="addjob-title">Добавить вакансию</div>
-          <button className="icon-close" onClick={onClose}>×</button>
-        </div>
-
-        <form className="modal-body" onSubmit={submit}>
-          <div className="grid-2">
-            <div className="field">
-              <label>Профессия<span className="req">*</span></label>
-              <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Frontend Developer" autoFocus />
-            </div>
-            <div className="field">
-              <label>Город<span className="req">*</span></label>
-              <input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы" />
-            </div>
-            <div className="field">
-              <label>Стаж / Требуемый опыт</label>
-              <input value={exp} onChange={(e)=>setExp(e.target.value)} placeholder="от 2 лет / Middle" />
-            </div>
-            <div className="field">
-              <label>График / Формат</label>
-              <input value={format} onChange={(e)=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote" />
-            </div>
-            <div className="field">
-              <label>Зарплата</label>
-              <input value={salary} onChange={(e)=>setSalary(e.target.value)} placeholder="до 900 000 ₸" />
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Обязанности <span className="hint">(списком, каждая строка — отдельный пункт)</span></label>
-            <textarea rows={5} value={duties} onChange={(e)=>setDuties(e.target.value)}
-              placeholder={`коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой`} />
-          </div>
-
-          <div className="field">
-            <label>Требования <span className="hint">(списком)</span></label>
-            <textarea rows={5} value={requirements} onChange={(e)=>setRequirements(e.target.value)}
-              placeholder={`дисциплина\nобучаемость\nответственность`} />
-          </div>
-
-          {error && <div className="form-error">{error}</div>}
-
-          <div className="modal-foot">
-            <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
-            <button type="submit" className="btn btn-primary">Сохранить</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-/* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» (обновлённый дизайн) ========= */
+/* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» ========= */
 function AddCandidateModal({ open, onClose, onAdd }) {
   const [name, setName] = useState("");
   const [profession, setProfession] = useState("");
@@ -258,29 +212,12 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   const [eduText, setEduText] = useState("");
   const [error, setError] = useState("");
 
-  // блокируем прокрутку страницы, когда модалка открыта
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  // reset полей при каждом открытии
   useEffect(() => {
     if (!open) return;
     setName(""); setProfession(""); setDesiredSalary("");
     setCountry("Казахстан"); setCity(""); setExperience("");
     setEmail(""); setResumeUrl(""); setWorkText(""); setEduText(""); setError("");
   }, [open]);
-
-  // закрытие по Esc
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -299,9 +236,9 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   const submit = (e) => {
     e.preventDefault();
     setError("");
-    if (!name.trim())        return setError("Укажите ФИО");
-    if (!profession.trim())  return setError("Укажите профессию");
-    if (!city.trim())        return setError("Укажите город");
+    if (!name.trim()) return setError("Укажите ФИО");
+    if (!profession.trim()) return setError("Укажите профессию");
+    if (!city.trim()) return setError("Укажите город");
     const c = {
       id: "c_" + Math.random().toString(36).slice(2,9),
       name: name.trim(),
@@ -320,157 +257,128 @@ function AddCandidateModal({ open, onClose, onAdd }) {
   };
 
   return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="addcand-title"
-      onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="modal-shell" role="document">
-        {/* Header */}
-        <div className="modal-head">
-          <div className="modal-title" id="addcand-title">Добавить соискателя</div>
-          <button className="icon-close" aria-label="Закрыть" onClick={onClose}>×</button>
+    <div className="auth-backdrop" role="dialog" aria-modal="true">
+      <div className="auth-modal" style={{width:"min(820px,96vw)"}}>
+        <div className="auth-head">
+          <div style={{fontWeight:600}}>Добавить соискателя</div>
+          <button className="auth-close" onClick={onClose}>×</button>
         </div>
-
-        {/* Body (прокручиваемая) */}
-        <form className="modal-body" onSubmit={submit}>
-          <div className="grid-2">
-            <div className="field">
-              <label>ФИО<span className="req">*</span></label>
-              <input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Иван Иванов" autoFocus />
-            </div>
-            <div className="field">
-              <label>Профессия<span className="req">*</span></label>
-              <input value={profession} onChange={(e)=>setProfession(e.target.value)} placeholder="Frontend Developer" />
-            </div>
-            <div className="field">
-              <label>Желаемая зарплата</label>
-              <input value={desiredSalary} onChange={(e)=>setDesiredSalary(e.target.value)} placeholder="от 500 000 ₸" />
-            </div>
-            <div className="field">
-              <label>Страна</label>
-              <input value={country} onChange={(e)=>setCountry(e.target.value)} placeholder="Казахстан" />
-            </div>
-            <div className="field">
-              <label>Город<span className="req">*</span></label>
-              <input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы" />
-            </div>
-            <div className="field">
-              <label>Опыт</label>
-              <input value={experience} onChange={(e)=>setExperience(e.target.value)} placeholder="2 года" />
-            </div>
-            <div className="field">
-              <label>Email</label>
-              <input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="user@example.com" />
-            </div>
-            <div className="field">
-              <label>Ссылка на резюме (PDF/Drive)</label>
-              <input value={resumeUrl} onChange={(e)=>setResumeUrl(e.target.value)} placeholder="https://..." />
-            </div>
+        <form className="auth-body" onSubmit={submit}>
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field"><label>ФИО*</label><input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Иван Иванов"/></div>
+            <div className="field"><label>Профессия*</label><input value={profession} onChange={(e)=>setProfession(e.target.value)} placeholder="Frontend Developer"/></div>
+            <div className="field"><label>Желаемая зарплата</label><input value={desiredSalary} onChange={(e)=>setDesiredSalary(e.target.value)} placeholder="от 500 000 ₸"/></div>
+            <div className="field"><label>Страна</label><input value={country} onChange={(e)=>setCountry(e.target.value)} placeholder="Казахстан"/></div>
+            <div className="field"><label>Город*</label><input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы"/></div>
+            <div className="field"><label>Опыт</label><input value={experience} onChange={(e)=>setExperience(e.target.value)} placeholder="2 года"/></div>
+            <div className="field"><label>Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="user@example.com"/></div>
+            <div className="field"><label>Ссылка на резюме (PDF/Drive)</label><input value={resumeUrl} onChange={(e)=>setResumeUrl(e.target.value)} placeholder="https://..."/></div>
           </div>
 
           <div className="field">
-            <label>Опыт работы <span className="hint">(каждая строка: period | company | title)</span></label>
-            <textarea
-              rows={6}
-              value={workText}
-              onChange={(e)=>setWorkText(e.target.value)}
-              placeholder={`авг 2025 — наст. время | HRI Lab | Research Assistant\nиюн 2025 — авг 2025 | nFactorial Incubator | Full-Stack Trainee`}
-            />
+            <label>Опыт работы (каждая строка: <strong>period | company | title</strong>)</label>
+            <textarea rows={6} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+              value={workText} onChange={(e)=>setWorkText(e.target.value)}
+              placeholder={`авг 2025 — наст. время | HRI Lab at Nazarbayev University | Research Assistant\nиюн 2025 — авг 2025 | nFactorial Incubator | Full-Stack Trainee`} />
           </div>
 
           <div className="field">
-            <label>Образование <span className="hint">(каждая строка: degree | place | field)</span></label>
-            <textarea
-              rows={4}
-              value={eduText}
-              onChange={(e)=>setEduText(e.target.value)}
-              placeholder={`Бакалавр | Nazarbayev University | Computer Science`}
-            />
+            <label>Образование (каждая строка: <strong>degree | place | field</strong>)</label>
+            <textarea rows={4} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+              value={eduText} onChange={(e)=>setEduText(e.target.value)}
+              placeholder={`Бакалавр | Nazarbayev University | Computer Science`} />
           </div>
 
-          {error && <div className="form-error">{error}</div>}
-
-          {/* Sticky footer */}
-          <div className="modal-foot">
+          {error && <div className="auth-error">{error}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
             <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
             <button type="submit" className="btn btn-primary">Сохранить</button>
           </div>
         </form>
       </div>
-
-      {/* Стили модалки */}
-      <style jsx global>{`
-        .modal-backdrop{
-          position:fixed; inset:0; z-index:1000;
-          background:rgba(2,8,23,.55); backdrop-filter:blur(6px);
-          display:flex; align-items:center; justify-content:center;
-          padding:24px;
-          animation:fadeIn .15s ease-out;
-        }
-        .modal-shell{
-          width:min(920px,96vw);
-          max-height:90vh;
-          background:var(--card);
-          border:1px solid var(--line);
-          border-radius:20px;
-          box-shadow:0 24px 80px rgba(2,8,23,.28);
-          overflow:hidden;
-          transform:scale(.98);
-          animation:popIn .15s ease-out forwards;
-        }
-        .modal-head{
-          display:flex; align-items:center; justify-content:space-between;
-          padding:14px 16px;
-          background:#f1f5f9; border-bottom:1px solid var(--line);
-        }
-        [data-theme="dark"] .modal-head{ background:#0b1424 }
-        .modal-title{ font-weight:700 }
-        .icon-close{
-          border:none; background:transparent; font-size:22px; line-height:1;
-          color:#94a3b8; cursor:pointer;
-        }
-        .modal-body{
-          padding:16px;
-          overflow:auto;
-          max-height:calc(90vh - 56px);
-        }
-        .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px }
-        @media (max-width:820px){ .grid-2{ grid-template-columns:1fr } }
-        .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
-        .field label{ font-size:13px; color:var(--muted) }
-        .req{ color:#ef4444; margin-left:4px }
-        .hint{ color:var(--muted); font-weight:400; }
-        .field input, .field textarea{
-          padding:10px 12px; border:1px solid var(--line); border-radius:12px;
-          background:transparent; color:var(--text); font-size:14px;
-        }
-        .field textarea{ resize:vertical }
-        .form-error{
-          color:#ef4444; background:#fef2f2; border:1px solid #fecaca;
-          padding:8px 10px; border-radius:10px; font-size:13px; margin-top:4px;
-        }
-        .modal-foot{
-          position:sticky; bottom:0; display:flex; gap:10px; justify-content:flex-end;
-          background:linear-gradient(to top, var(--card) 80%, rgba(0,0,0,0) );
-          padding-top:12px; margin-top:6px;
-        }
-        .btn{ border:none; cursor:pointer; border-radius:12px; padding:10px 14px; font-weight:700; font-size:14px }
-        .btn-primary{ background:var(--brand); color:#fff }
-        .btn-primary:hover{ background:#1e4ed8 }
-        .btn-outline{ background:transparent; border:1px solid var(--brand); color:var(--brand) }
-        .btn-outline:hover{ background:rgba(37,99,235,.08) }
-        @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
-        @keyframes popIn{ to{ transform:scale(1) } }
-      `}</style>
     </div>
   );
 }
 
+/* ========= МОДАЛКА «ДОБАВИТЬ ВАКАНСИЮ» ========= */
+function AddJobModal({ open, onClose, onAdd }) {
+  const [title,  setTitle]  = useState("");
+  const [city,   setCity]   = useState("");
+  const [exp,    setExp]    = useState("");
+  const [format, setFormat] = useState("");
+  const [salary, setSalary] = useState("");
+  const [duties, setDuties] = useState("");
+  const [reqs,   setReqs]   = useState("");
+  const [error,  setError]  = useState("");
 
-/* ========= МОДАЛКА ПРЕДПРОСМОТРА ========= */
+  useEffect(() => {
+    if (!open) return;
+    setTitle(""); setCity(""); setExp(""); setFormat(""); setSalary(""); setDuties(""); setReqs(""); setError("");
+  }, [open]);
+
+  if (!open) return null;
+
+  const submit = (e) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) return setError("Укажите профессию / должность");
+    if (!city.trim())  return setError("Укажите город");
+    onAdd({
+      id: "j_" + Math.random().toString(36).slice(2,9),
+      title: title.trim(),
+      city: city.trim(),
+      exp: exp.trim(),
+      format: format.trim(),
+      salary: salary.trim(),
+      duties: duties.split("\n").map(s=>s.trim()).filter(Boolean),
+      reqs:   reqs.split("\n").map(s=>s.trim()).filter(Boolean),
+    });
+    onClose();
+  };
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true">
+      <div className="auth-modal" style={{width:"min(820px,96vw)"}}>
+        <div className="auth-head">
+          <div style={{fontWeight:600}}>Добавить вакансию</div>
+          <button className="auth-close" onClick={onClose}>×</button>
+        </div>
+        <form className="auth-body" onSubmit={submit}>
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field"><label>Профессия / Должность*</label><input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Frontend Developer"/></div>
+            <div className="field"><label>Город*</label><input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы"/></div>
+            <div className="field"><label>Стаж / Требуемый опыт</label><input value={exp} onChange={(e)=>setExp(e.target.value)} placeholder="от 2 лет / Middle"/></div>
+            <div className="field"><label>График / Формат</label><input value={format} onChange={(e)=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote"/></div>
+            <div className="field" style={{gridColumn:"span 2"}}><label>Зарплата</label><input value={salary} onChange={(e)=>setSalary(e.target.value)} placeholder="до 900 000 ₸"/></div>
+          </div>
+
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field">
+              <label>Обязанности (каждая строка — отдельный пункт)</label>
+              <textarea rows={5} value={duties} onChange={(e)=>setDuties(e.target.value)}
+                style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+                placeholder={`коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой`} />
+            </div>
+            <div className="field">
+              <label>Требования (каждая строка — отдельный пункт)</label>
+              <textarea rows={5} value={reqs} onChange={(e)=>setReqs(e.target.value)}
+                style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+                placeholder={`дисциплина\nобучаемость\nответственность`} />
+            </div>
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
+            <button type="submit" className="btn btn-primary">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ========= МОДАЛКА ПРЕДПРОСМОТРА СОИСКАТЕЛЯ ========= */
 function CandidatePreview({ open, onClose, candidate }) {
   if (!open || !candidate) return null;
   return (
@@ -543,24 +451,21 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= SMARTBOT (автоформула + Gemini API) ========= */
+/* ========= SMARTBOT (автоформула + Gemini API при диалоге) ========= */
 function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]);
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
-  const listRef  = useRef(null);
+  const listRef = useRef(null);
 
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
 
   useEffect(() => {
     if (!open) return;
-    setMessages([]);
-    setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
-    setFinalScore(null);
+    setMessages([]); setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" }); setFinalScore(null);
 
     if (candidate) {
-      // режим работодателя — автооценка без чата
       const score = computeAutoScore(candidate, job);
       setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
       setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
@@ -568,9 +473,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       saveApplication(score, candidate);
       return;
     }
-
-    // режим соискателя — обязательно отправляем INIT, чтобы на бэке всегда были contents
-    askGemini([{ role: "user", content: "INIT" }]);
+    askGemini([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id, candidate?.id]);
 
@@ -578,57 +481,25 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // ===== Автоформула релевантности (0..100) =====
-  const parseYears = (t) => {
-    if (!t) return 0;
-    const m = String(t).match(/(\d+(\.\d+)?)/);
-    return m ? Number(m[1]) : 0;
-  };
-  function scoreKeywordMatch(candidate, job) {
-    const jt = (job.title || "").toLowerCase();
-    const pf = (candidate.profession || "").toLowerCase();
-    if (!jt || !pf) return 0;
-    let s = 0;
-    if (pf.includes(jt) || jt.includes(pf)) s += 40;
-    const keywords = jt.split(/\W+/).filter(Boolean);
-    let matches = 0;
-    for (const k of keywords) if (pf.includes(k)) matches++;
-    s += Math.min(30, matches * 6);
-    return s;
-  }
-  function computeAutoScore(candidate, job) {
-    let score = 50;
-    if (candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase()) score += 15;
-    score += scoreKeywordMatch(candidate, job);
-    const candYears = parseYears(candidate.experience);
-    let requiredYears = 0;
-    if (job.exp) {
-      const m = String(job.exp).match(/(\d+)/);
-      if (m) requiredYears = Number(m[1]);
-      else if (/senior/i.test(job.exp)) requiredYears = 5;
-      else if (/middle\+?/i.test(job.exp)) requiredYears = 3;
-      else if (/middle/i.test(job.exp)) requiredYears = 2;
-      else if (/junior/i.test(job.exp)) requiredYears = 0.5;
-    }
-    if (requiredYears > 0) {
-      if (candYears >= requiredYears) score += 15;
-      else score -= Math.min(20, (requiredYears - candYears) * 6);
-    }
-    if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
-    return Math.round(Math.max(0, Math.min(100, score)));
+  function parseYears(text){ if(!text) return 0; const m=String(text).match(/(\d+(\.\d+)?)/); return m?Number(m[1]):0; }
+  function scoreKeywordMatch(c, j){ const jt=(j.title||"").toLowerCase(); const pf=(c.profession||"").toLowerCase(); if(!jt||!pf) return 0; let s=0; if(pf.includes(jt)||jt.includes(pf)) s+=40; const ks=jt.split(/\W+/).filter(Boolean); let m=0; for(const k of ks) if(pf.includes(k)) m++; s+=Math.min(30,m*6); return s; }
+  function computeAutoScore(c,j){ let score=50; if(c.city&&j.city&&c.city.toLowerCase()===j.city.toLowerCase()) score+=15; score+=scoreKeywordMatch(c,j);
+    const cy=parseYears(c.experience); let ry=0; if(j.exp){ const m=String(j.exp).match(/(\d+)/); if(m) ry=Number(m[1]); else if(/senior/i.test(j.exp)) ry=5; else if(/middle\+?/i.test(j.exp)) ry=3; else if(/middle/i.test(j.exp)) ry=2; else if(/junior/i.test(j.exp)) ry=.5; }
+    if(ry>0){ if(cy>=ry) score+=15; else score-=Math.min(20,(ry-cy)*6); }
+    if(c.desiredFormat&&j.format&&c.desiredFormat.toLowerCase().includes(j.format.toLowerCase())) score+=5;
+    return Math.round(Math.max(0,Math.min(100,score)));
   }
 
-  // Сохранение результата
-  function saveApplication(score, candidateParam = null) {
+  function saveApplication(score, candParam=null){
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
     const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
-    const candidateName = candidateParam ? candidateParam.name : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
-    const candidateEmail = candidateParam?.email || currentUser?.email || "";
+    const candidateName = candParam ? candParam.name : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
+    const candidateEmail = candParam?.email || currentUser?.email || "";
     all.push({
       name: candidateName,
       email: candidateEmail,
-      city: candidateParam?.city || signals.city,
-      exp:  candidateParam?.experience || signals.exp,
+      city: candParam?.city || signals.city,
+      exp: candParam?.experience || signals.exp,
       format: signals.format,
       score: Number(score) || 0,
       jobId: job.id, jobTitle: job.title,
@@ -637,79 +508,45 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
-  // ======= Клиент Gemini — совместим со старым / новым ответом =======
-  async function askGemini(history) {
+  async function askGemini(history){
     setReplying(true);
-    try {
+    try{
       const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? { name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), city: "", experience: "", profession: "", preferredFormat: "" } : {};
-
+      const profile = u ? { name: `${u.firstName||""} ${u.lastName||""}`.trim(), city:"", experience:"", profession:"", preferredFormat:"" } : {};
       const res = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // ВНИМАНИЕ: всегда отправляем хотя бы 1 сообщение
-        body: JSON.stringify({
-          history: history && history.length ? history : [{ role: "user", content: "INIT" }],
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
-        }),
+        method:"POST", headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ history, vacancy:{ id:job.id, title:job.title, city:job.city, exp:job.exp, format:job.format }, profile })
       });
-
-      if (!res.ok) {
-        setMessages((arr)=>[...arr, { role:"assistant", content:"Извините, сервер ассистента недоступен." }]);
-        return;
-      }
-
+      if(!res.ok){ setMessages(a=>[...a,{role:"assistant",content:"Извините, сервер ассистента недоступен."}]); return; }
       const data = await res.json();
-
-      const reply =
-        data.reply ?? data.text ?? data.message ?? data.output ??
-        (typeof data === "string" ? data : "") ?? "Готов продолжить скрининг.";
-
+      const reply = data.reply ?? data.text ?? data.message ?? data.output ?? (typeof data==="string"?data:"") ?? "Готов продолжить скрининг.";
       const rawSignals = data.signals ?? data.meta?.signals ?? data.extracted ?? data.info ?? {};
-      const norm = (v) => (typeof v === "string" ? v : (v?.value ?? v?.text ?? v ?? "неизвестно"));
-      const nextSignals = {
-        city:   norm(rawSignals.city ?? signals.city ?? "неизвестно"),
-        exp:    norm(rawSignals.exp ?? rawSignals.experience ?? signals.exp ?? "неизвестно"),
-        format: norm(rawSignals.format ?? signals.format ?? "неизвестно"),
-      };
-
+      const norm = (v)=> (typeof v==="string"?v:(v?.value ?? v?.text ?? v ?? "неизвестно"));
+      const nextSignals = { city:norm(rawSignals.city ?? signals.city ?? "неизвестно"), exp:norm(rawSignals.exp ?? rawSignals.experience ?? signals.exp ?? "неизвестно"), format:norm(rawSignals.format ?? signals.format ?? "неизвестно") };
       const final = data.final_score ?? data.finalScore ?? data.score ?? data.relevance ?? null;
-      const done  = data.next_action === "finish" || data.done === true || typeof final === "number";
-
-      setMessages((arr)=>[...arr, { role:"assistant", content: reply }]);
-      setSignals(nextSignals);
-
-      if (done && typeof final === "number") {
-        setFinalScore(final);
-        saveApplication(final);
-        setMessages((arr)=>[...arr, { role:"assistant", content:`Итоговая релевантность: ${final}%` }]);
-      }
-    } catch {
-      setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
-    } finally {
-      setReplying(false);
-    }
+      const done = data.next_action==="finish" || data.done===true || typeof final==="number";
+      setMessages(a=>[...a,{role:"assistant",content:reply}]); setSignals(nextSignals);
+      if(done && typeof final==="number"){ setFinalScore(final); saveApplication(final); setMessages(a=>[...a,{role:"assistant",content:`Итоговая релевантность: ${final}%`}]); }
+    }catch{
+      setMessages(a=>[...a,{role:"assistant",content:"Произошла ошибка соединения."}]);
+    }finally{ setReplying(false); }
   }
 
   const sendUser = (text) => {
     const v = (text || "").trim();
     if (!v || replying) return;
     setMessages((arr)=>[...arr, { role:"user", content:v }]);
-    const hist = [...messages, { role: "user", content: v }]
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => ({ role: m.role, content: m.content }));
-    // Всегда есть хотя бы INIT в askGemini
-    askGemini(hist.length ? hist : [{ role: "user", content: "INIT" }]);
+    const hist = [...messages, { role:"user", content:v }].filter(m=>m.role==="user"||m.role==="assistant").map(m=>({role:m.role, content:m.content}));
+    askGemini(hist);
   };
 
-  if (!open) return null;
+  if (!open || !job) return null;
 
   return (
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
         <div className="sb-head">
-          <div className="sb-title" id="sb-title">🤖HR - manager</div>
+          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг</div>
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
@@ -728,40 +565,17 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 
           <div className="sb-messages" ref={listRef}>
             {messages.map((m, i) => (
-              <div
-                key={i}
-                className={m.role === "assistant" ? "sb-bot" : "sb-user"}
-                dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}
-              />
+              <div key={i} className={m.role === "assistant" ? "sb-bot" : "sb-user"}
+                dangerouslySetInnerHTML={{ __html: `<b>${m.role === "assistant" ? "SmartBot" : "Вы"}:</b> ${esc(m.content)}` }}/>
             ))}
             {replying && !candidate && <div className="sb-bot"><b>SmartBot:</b> печатает…</div>}
           </div>
 
           {!candidate && (
             <div className="sb-input">
-              <input
-                ref={inputRef}
-                type="text"
-                placeholder="Введите ответ…"
-                disabled={replying}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const v = e.currentTarget.value;
-                    e.currentTarget.value = "";
-                    sendUser(v);
-                  }
-                }}
-              />
-              <button
-                disabled={replying}
-                onClick={() => {
-                  const el = inputRef.current;
-                  const v = el?.value?.trim();
-                  if (!v) return;
-                  el.value = "";
-                  sendUser(v);
-                }}
-              >
+              <input ref={inputRef} type="text" placeholder="Введите ответ..." disabled={replying}
+                onKeyDown={(e)=>{ if(e.key==="Enter"){ const v=e.currentTarget.value; e.currentTarget.value=""; sendUser(v);} }}/>
+              <button disabled={replying} onClick={()=>{ const el=inputRef.current; const v=el?.value?.trim(); if(!v) return; el.value=""; sendUser(v); }}>
                 Отправить
               </button>
             </div>
@@ -782,27 +596,22 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
         .sb-bot{background:#f1f5f9;align-self:flex-start}[data-theme="dark"] .sb-bot{background:#122033}
         .sb-user{background:#dbeafe;align-self:flex-end}[data-theme="dark"] .sb-user{background:#1d3a6a}
         .sb-input{display:flex;gap:8px;margin-top:12px}
-        .sb-input input{flex:1;padding:12px 14px;border:2px solid var(--brand);border-radius:14px;font-size:15px;background:#fff;color:#0f172a;outline:none}
-        [data-theme="dark"] .sb-input input{background:#0b1424;color:#e5efff;border-color:#1e3a8a}
-        .sb-input input::placeholder{opacity:.75}
-        .sb-input button{padding:12px 14px;border-radius:14px;border:none;background:var(--brand);color:#fff;font-weight:700;cursor:pointer}
+        .sb-input input{flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font-size:14px;background:transparent;color:var(--text)}
+        .sb-input button{padding:10px 12px;border-radius:12px;border:none;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
       `}</style>
     </div>
   );
 }
 
-/* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
+/* ========= ТАБЛИЦА ОТКЛИКОВ ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
-
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
-      .slice()
-      .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+      .slice().sort((a,b)=>Number(b.score||0)-Number(a.score||0));
     setRows(data);
   };
   useEffect(()=>{ load(); }, []);
-
   const tone = (s)=> (s>=80?"b-good":s>=60?"b-warn":"b-bad");
 
   const clearAll = () => {
@@ -813,57 +622,18 @@ function EmployerTable() {
 
   const exportPDF = () => {
     const html = `
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="utf-8" />
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8" />
 <title>Отчёт SmartBot</title>
-<style>
-  body{font-family:Arial, sans-serif; padding:24px; color:#111;}
-  h1{margin:0 0 16px 0; font-size:20px}
-  table{border-collapse:collapse; width:100%}
-  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
-  th{background:#f3f4f6}
-  .right{text-align:right}
-</style>
-</head>
-<body>
-  <h1>Отчёт SmartBot — релевантность кандидатов</h1>
-  <div style="font-size:12px;margin-bottom:10px;color:#555">
-    Сформировано: ${new Date().toLocaleString()}
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Имя</th>
-        <th>Email</th>
-        <th>Вакансия</th>
-        <th class="right">Релевантность</th>
-        <th>Город</th>
-        <th>Опыт</th>
-        <th>Дата</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows.map(r=>`
-        <tr>
-          <td>${esc(r.name)}</td>
-          <td>${esc(r.email||"-")}</td>
-          <td>${esc(r.jobTitle||"")}</td>
-          <td class="right">${Number(r.score)||0}%</td>
-          <td>${esc(r.city||"-")}</td>
-          <td>${esc(r.exp||"-")}</td>
-          <td>${new Date(r.date).toLocaleString()}</td>
-        </tr>`).join("")}
-    </tbody>
-  </table>
-  <script>window.print();</script>
-</body>
-</html>`;
-    const w = window.open("", "_blank");
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+<style>body{font-family:Arial,sans-serif;padding:24px;color:#111}h1{margin:0 0 16px 0;font-size:20px}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;font-size:12px;text-align:left}th{background:#f3f4f6}.right{text-align:right}</style>
+</head><body>
+<h1>Отчёт SmartBot — релевантность кандидатов</h1>
+<div style="font-size:12px;margin-bottom:10px;color:#555">Сформировано: ${new Date().toLocaleString()}</div>
+<table><thead><tr><th>Имя</th><th>Email</th><th>Вакансия</th><th class="right">Релевантность</th><th>Город</th><th>Опыт</th><th>Дата</th></tr></thead>
+<tbody>
+${rows.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.email||"-")}</td><td>${esc(r.jobTitle||"")}</td><td class="right">${Number(r.score)||0}%</td><td>${esc(r.city||"-")}</td><td>${esc(r.exp||"-")}</td><td>${new Date(r.date).toLocaleString()}</td></tr>`).join("")}
+</tbody></table><script>window.print();</script></body></html>`;
+    const w = window.open("", "_blank"); w.document.open(); w.document.write(html); w.document.close();
   };
 
   return (
@@ -907,57 +677,57 @@ export default function Page() {
   const [view, setView] = useState("jobs");        // jobs | employer
   const [mode, setMode] = useState("find_job");    // find_job | find_employee
   const [modalOpen, setModalOpen] = useState(false);
-  const [job, setJob] = useState(JOBS[0]);
+  const [job, setJob] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [q, setQ] = useState("");
   const [candOpen, setCandOpen] = useState(false);
   const [cand, setCand] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [candidates, setCandidates] = useState(SEED_CANDIDATES);
-  const [jobs, setJobs] = useState(JOBS);
   const [addJobOpen, setAddJobOpen] = useState(false);
+
+  const [candidates, setCandidates] = useState(SEED_CANDIDATES);
+  const [jobs, setJobs] = useState(SEED_JOBS);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
     setTheme(savedTheme);
     document.body.setAttribute("data-theme", savedTheme);
 
-    // инициализация кандидатов
-    const saved = localStorage.getItem("jb_candidates");
-    if (saved) {
-      try { setCandidates(JSON.parse(saved)); } catch { setCandidates(SEED_CANDIDATES); }
+    const savedC = localStorage.getItem("jb_candidates");
+    if (savedC) {
+      try { setCandidates(JSON.parse(savedC)); } catch { setCandidates(SEED_CANDIDATES); }
     } else {
       localStorage.setItem("jb_candidates", JSON.stringify(SEED_CANDIDATES));
       setCandidates(SEED_CANDIDATES);
     }
 
-    const cur = localStorage.getItem("jb_current");
-    if (cur) {
-      try { const u = JSON.parse(cur); setUser(u); if (u.role === "applicant") setView("jobs"); } catch {}
+    const savedJ = localStorage.getItem("jb_jobs");
+    if (savedJ) {
+      try { setJobs(JSON.parse(savedJ)); } catch { setJobs(SEED_JOBS); }
+    } else {
+      localStorage.setItem("jb_jobs", JSON.stringify(SEED_JOBS));
+      setJobs(SEED_JOBS);
     }
+
+    const cur = localStorage.getItem("jb_current");
+    if (cur) { try { const u = JSON.parse(cur); setUser(u); if (u.role === "applicant") setView("jobs"); } catch {} }
   }, []);
 
-  const persistCandidates = (arr) => {
-    setCandidates(arr);
-    localStorage.setItem("jb_candidates", JSON.stringify(arr));
-  };
+  const persistCandidates = (arr) => { setCandidates(arr); localStorage.setItem("jb_candidates", JSON.stringify(arr)); };
+  const persistJobs = (arr) => { setJobs(arr); localStorage.setItem("jb_jobs", JSON.stringify(arr)); };
 
   const switchTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.body.setAttribute("data-theme", next);
-    localStorage.setItem("theme", next);
+    setTheme(next); document.body.setAttribute("data-theme", next); localStorage.setItem("theme", next);
   };
-
   const logout = () => { localStorage.removeItem("jb_current"); setUser(null); setView("jobs"); };
 
-  // Поиск по вакансиям / кандидатам (одно поле — два режима)
   const filteredJobs = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return JOBS;
-    return JOBS.filter((j) => [j.title, j.city, j.format, j.exp, j.salary].join(" ").toLowerCase().includes(t));
-  }, [q]);
+    if (!t) return jobs;
+    return jobs.filter((j) => [j.title, j.city, j.format, j.exp, j.salary, (j.duties||[]).join(" "), (j.reqs||[]).join(" ")].join(" ").toLowerCase().includes(t));
+  }, [q, jobs]);
 
   const filteredCandidates = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -968,11 +738,8 @@ export default function Page() {
   }, [q, candidates]);
 
   const canSeeEmployer = !user || user.role === "employer";
-
-  const handleAddCandidate = (c) => {
-    const next = [c, ...candidates];
-    persistCandidates(next);
-  };
+  const handleAddCandidate = (c) => { const next=[c, ...candidates]; persistCandidates(next); };
+  const handleAddJob = (j) => { const next=[j, ...jobs]; persistJobs(next); };
 
   return (
     <>
@@ -986,13 +753,8 @@ export default function Page() {
             <button className={clsx("seg", mode==="find_employee" && "seg-active")} onClick={()=>setMode("find_employee")}>Найти сотрудника</button>
           </div>
 
-          {/* УЛУЧШЕННЫЙ ПОИСК — большой, заметный */}
           <div className="search">
-            <input
-              value={q}
-              onChange={(e)=>setQ(e.target.value)}
-              placeholder={mode==="find_job" ? "Поиск вакансий (должность, город, формат)..." : "Поиск по соискателям (ФИО, должность, город)..."}
-            />
+            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder={mode==="find_job" ? "Поиск вакансий…" : "Поиск по соискателям…"} />
           </div>
 
           <div className="nav">
@@ -1025,7 +787,7 @@ export default function Page() {
               : "Смотрите карточки соискателей, открывайте резюме и изучайте опыт. Работодатели могут добавлять новых соискателей."}
             </p>
           </div>
-          <div className="pill">Демо-версия from SE40</div>
+          <div className="pill">Демо-версия (фронтенд only)</div>
         </section>
 
         {/* === Найти работу === */}
@@ -1033,9 +795,11 @@ export default function Page() {
           <>
             {view === "jobs" && (
               <section>
-                <div className="card" style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                    <div className="title" style={{margin:0}}>Список вакансий</div>
+                <div className="card" style={{marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                  <div className="title" style={{margin:0}}>Список вакансий</div>
+                  {user?.role === "employer" && (
                     <button className="btn btn-primary" onClick={()=>setAddJobOpen(true)}>Добавить вакансию</button>
+                  )}
                 </div>
 
                 {filteredJobs.length === 0 ? (
@@ -1052,8 +816,14 @@ export default function Page() {
                           {j.salary && <span className="pill">{j.salary}</span>}
                         </div>
                         <div className="row">
-                          <div><strong>Обязанности:</strong> коммуникация, отчётность, командная работа</div>
-                          <div><strong>Требования:</strong> дисциплина, обучаемость, ответственность</div>
+                          <div>
+                            <strong>Обязанности:</strong>{" "}
+                            {Array.isArray(j.duties) && j.duties.length ? j.duties.join(", ") : "коммуникация, отчётность, командная работа"}
+                          </div>
+                          <div>
+                            <strong>Требования:</strong>{" "}
+                            {Array.isArray(j.reqs) && j.reqs.length ? j.reqs.join(", ") : "дисциплина, обучаемость, ответственность"}
+                          </div>
                         </div>
                         <div className="actions">
                           <button className="btn btn-primary" onClick={()=>{ setJob(j); setModalOpen(true); }}>Откликнуться</button>
@@ -1106,16 +876,8 @@ export default function Page() {
                         Предпросмотр
                       </button>
 
-                      {/* Авто-оценка SmartBot для работодателя */}
                       {user?.role === "employer" && (
-                        <button
-                          className="btn btn-outline"
-                          onClick={() => {
-                            setJob(JOBS[0]); // в демо выбираем первую вакансию; можешь заменить на выбор из списка
-                            setCand(c);
-                            setModalOpen(true);
-                          }}
-                        >
+                        <button className="btn btn-outline" onClick={() => { setJob(jobs[0]); setCand(c); setModalOpen(true); }}>
                           Оценить SmartBot
                         </button>
                       )}
@@ -1133,33 +895,15 @@ export default function Page() {
           </section>
         )}
 
-        <p className="foot">© 2025 JobBoard Demo. Данные на странице — демонстрационные (кандидаты сохраняются в вашем браузере).</p>
+        <p className="foot">© 2025 JobBoard Demo. Данные на странице — демонстрационные (кандидаты и вакансии сохраняются в вашем браузере).</p>
       </div>
 
       {/* Модалки */}
-      <SmartBotModal
-        open={modalOpen}
-        job={job}
-        candidate={cand}
-        onClose={() => { setModalOpen(false); setCand(null); }}
-      />
+      <SmartBotModal open={modalOpen} job={job} candidate={cand} onClose={() => { setModalOpen(false); setCand(null); }} />
       <AuthModal open={authOpen} onClose={()=>setAuthOpen(false)} onAuth={(u)=>{ setUser(u); if(u.role==="applicant") setView("jobs"); }} />
       <CandidatePreview open={candOpen} onClose={()=>setCandOpen(false)} candidate={cand} />
-      <AddCandidateModal
-        open={addOpen}
-        onClose={()=>setAddOpen(false)}
-        onAdd={(c)=>handleAddCandidate(c)}
-      />
-      <AddJobModal
-        open={addJobOpen}
-        onClose={()=>setAddJobOpen(false)}
-        onAdd={(newJob)=>{
-        const next = [newJob, ...jobs];
-        setJobs(next);
-    localStorage.setItem("jb_jobs", JSON.stringify(next));
-  }}
-/>
-
+      <AddCandidateModal open={addOpen} onClose={()=>setAddOpen(false)} onAdd={(c)=>handleAddCandidate(c)} />
+      <AddJobModal open={addJobOpen} onClose={()=>setAddJobOpen(false)} onAdd={(j)=>handleAddJob(j)} />
 
       {/* Стили */}
       <style jsx global>{`
@@ -1179,42 +923,16 @@ export default function Page() {
         .container{max-width:1100px;margin:0 auto;padding:24px}
         .header{position:sticky;top:0;z-index:10;backdrop-filter:saturate(1.3) blur(6px);background:rgba(255,255,255,.85);border-bottom:1px solid var(--line)}
         [data-theme="dark"] .header{background:rgba(15,23,42,.8)}
-        .header-inner {max-width: 1250px;margin: 0 auto;display: flex;align-items: center;justify-content: space-between;gap: 12px;padding: 10px 20px;}
-        .logo {
-            font-weight: 700;
-            flex-shrink: 0;
-        }
-        .mode {
-            display: flex;
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            overflow: hidden;
-            flex-shrink: 0;
-        }
-        .seg{border:none;background:transparent;padding:10px 14px;font-weight:700;color:var(--muted);cursor:pointer}
-        .seg-active{background:rgba(37,99,235,.12);color:var(--text)}
-        .search {
-            flex: 1;
-            max-width: 560px;
-        }
-        .search input {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid var(--line);
-            border-radius: 12px;
-            background: transparent;
-            color: var(--text);
-            font-size: 14px;
-        }
-        [data-theme="dark"] .search input{background:#0b1424;color:#e5efff;border-color:#1e3a8a}
-        .nav {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-shrink: 0;
-        }
+        .header-inner{max-width:1100px;margin:0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px}
+        .logo{font-weight:700}
+        .mode{margin-left:12px;display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+        .seg{border:none;background:transparent;padding:8px 12px;font-weight:600;color:var(--muted);cursor:pointer}
+        .seg-active{background:rgba(37,99,235,.08);color:var(--text)}
+        .search{margin-left:12px;flex:1}
+        .search input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--text);font-size:14px}
+        .nav{margin-left:auto;display:flex;gap:8px;align-items:center}
         .nav button{font-size:14px;color:var(--muted);border:none;background:transparent;padding:8px 10px;border-radius:10px;cursor:pointer}
-        .nav button.active{color:var(--text);background:rgba(37,99,235,.12)}
+        .nav button.active{color:var(--text);background:rgba(37,99,235,.08)}
         .userbox{display:flex;align-items:center;gap:10px;margin-left:8px}
         .avatar{width:32px;height:32px;border-radius:50%;background:#e2e8f0;color:#0f172a;display:flex;align-items:center;justify-content:center;font-weight:700}
         [data-theme="dark"] .avatar{background:#1e293b;color:#e5efff}
@@ -1234,16 +952,16 @@ export default function Page() {
         .pill{background:var(--pill); color:#1e3a8a; border:1px solid #dbeafe; padding:6px 10px; border-radius:999px; font-size:12px}
         .row{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;color:var(--muted);font-size:14px}
         .actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
-        .btn{border:none;cursor:pointer;border-radius:12px;padding:10px 14px;font-weight:700;font-size:14px;transition:filter .15s, background .2s, border-color .2s}
+        .btn{border:none;cursor:pointer;border-radius:12px;padding:10px 14px;font-weight:600;font-size:14px;transition:filter .15s, background .2s, border-color .2s}
         .btn-primary{background:var(--brand); color:#fff}.btn-primary:hover{background:#1e4ed8}
-        .btn-outline{background:transparent;border:2px solid var(--brand); color:var(--brand)}.btn-outline:hover{background:rgba(37,99,235,.08)}
+        .btn-outline{background:transparent;border:1px solid var(--brand); color:var(--brand)}.btn-outline:hover{background:rgba(37,99,235,.08)}
         .foot{margin:40px 0 20px;color:var(--muted);font-size:13px;text-align:center}
         .table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
         .table th,.table td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
         .table th{background:#f8fafc;color:var(--muted);font-weight:600}
         [data-theme="dark"] .table th{background:#0b1424}
         .table tr:nth-child(even){background:var(--table-stripe)}
-        .badge{padding:4px 8px;border-radius:999px;font-weight:700;font-size:12px;color:#fff}
+        .badge{padding:4px 8px;border-radius:999px;font-weight:600;font-size:12px;color:#fff}
         .b-good{background:#10b981}.b-warn{background:#f59e0b}.b-bad{background:#ef4444}
         .grid .field{display:flex;flex-direction:column;gap:6px}
       `}</style>
