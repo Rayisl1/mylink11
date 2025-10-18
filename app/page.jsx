@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/* ========= ДАННЫЕ ========= */
-// вакансии (как раньше)
+/* ========= ДАННЫЕ: вакансии ========= */
 const JOBS = [
   { id: 1,  title: "Менеджер по продажам",            city: "Алматы",    exp: "от 2 лет",   format: "Полный день",  salary: "от 300 000 ₸" },
   { id: 2,  title: "Маркетолог Performance",           city: "Астана",    exp: "от 3 лет",   format: "Гибрид",       salary: "от 600 000 ₸" },
@@ -18,52 +17,29 @@ const JOBS = [
   { id:12,  title: "Salesforce Administrator",         city: "Алматы",    exp: "Middle",     format: "Полный день",  salary: "" },
 ];
 
-// соискатели (демо)
-// можно хранить в базе позже; сейчас — статический список
-const CANDIDATES = [
+/* ========= ДЕМО-СОИСКАТЕЛИ (12 шт.) ========= */
+const SEED_CANDIDATES = [
   {
     id: "c1",
-    name: "Aruzhan Kaiyrbek",
+    name: "Darkhan Serikbay",
     profession: "Research Assistant — Social Robotics / Full-Stack Trainee",
     desiredSalary: "от 400 000 ₸",
     country: "Казахстан",
     city: "Астана",
     experience: "1 год 1 месяц",
     email: "aruzhan@example.com",
-    resumeUrl: "#", // сюда позже поставим реальную ссылку на резюме (PDF/Drive)
+    resumeUrl: "#",
     work: [
-      {
-        period: "август 2025 — по настоящее время",
-        company: "HRI Lab at Nazarbayev University",
-        title: "Research Assistant – Social Robotics Projects",
-      },
-      {
-        period: "апрель 2025 — по настоящее время",
-        company: "NU ACM Student Chapter",
-        title: "Vice Chair – ACM-W Student Chapter",
-      },
-      {
-        period: "июнь 2025 — август 2025",
-        company: "nFactorial Incubator",
-        title: "Full-Stack Development Trainee",
-      },
-      {
-        period: "июнь 2025 — август 2025",
-        company: "Novators LLP",
-        title: "Software Development Intern",
-      },
+      { period: "авг 2025 — наст. время", company: "HRI Lab at Nazarbayev University", title: "Research Assistant – Social Robotics Projects" },
+      { period: "апр 2025 — наст. время", company: "NU ACM Student Chapter", title: "Vice Chair – ACM-W Student Chapter" },
+      { period: "июн 2025 — авг 2025", company: "nFactorial Incubator", title: "Full-Stack Development Trainee" },
+      { period: "июн 2025 — авг 2025", company: "Novators LLP", title: "Software Development Intern" },
     ],
-    education: [
-      {
-        degree: "Бакалавр",
-        place: "Nazarbayev University",
-        field: "Computer Science",
-      },
-    ],
+    education: [{ degree: "Бакалавр", place: "Nazarbayev University", field: "Computer Science" }],
   },
   {
     id: "c2",
-    name: "Dias Zhaksylykov",
+    name: "Bakhtiyar Koishin",
     profession: "Frontend Developer (React/Next.js)",
     desiredSalary: "от 800 000 ₸",
     country: "Казахстан",
@@ -79,13 +55,13 @@ const CANDIDATES = [
   },
   {
     id: "c3",
-    name: "Aigul Saparova",
+    name: "Nurislam Aldabergenuly",
     profession: "HR Generalist",
-    desiredSalary: "от 500 000 ₸",
+    desiredSalary: "от 1 000 000 ₸",
     country: "Казахстан",
-    city: "Алматы",
+    city: "Караганда",
     experience: "2+ года",
-    email: "aigul.hr@example.com",
+    email: "nurss.aldb@gmail.com",
     resumeUrl: "#",
     work: [
       { period: "2024 — 2025", company: "TechStart", title: "HR Generalist" },
@@ -93,13 +69,153 @@ const CANDIDATES = [
     ],
     education: [{ degree: "Бакалавр", place: "ENU", field: "Психология" }],
   },
+  {
+    id: "c4",
+    name: "Islam Turganbay",
+    profession: "Backend Developer (Node.js/NestJS)",
+    desiredSalary: "от 900 000 ₸",
+    country: "Казахстан",
+    city: "Астана",
+    experience: "4 года",
+    email: "maksat.backend@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2022 — 2025", company: "Gov Digital", title: "Backend Engineer (Node.js, PostgreSQL, Redis)" },
+      { period: "2020 — 2022", company: "ERP Systems", title: "Software Engineer" },
+    ],
+    education: [{ degree: "Бакалавр", place: "ENU", field: "Информатика" }],
+  },
+  {
+    id: "c5",
+    name: "Elina Karim",
+    profession: "UI/UX Designer",
+    desiredSalary: "от 600 000 ₸",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "2 года",
+    email: "elina.uiux@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2023 — 2025", company: "E-comm Group", title: "Product Designer" },
+      { period: "2022 — 2023", company: "Creative Studio", title: "Junior UI/UX Designer" },
+    ],
+    education: [{ degree: "Бакалавр", place: "KBTU", field: "Digital Design" }],
+  },
+  {
+    id: "c6",
+    name: "Nurlan Seitov",
+    profession: "DevOps Engineer (AWS/K8s)",
+    desiredSalary: "от 1 200 000 ₸",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "5 лет",
+    email: "nurlan.devops@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2021 — 2025", company: "CloudOps KZ", title: "DevOps Engineer" },
+      { period: "2019 — 2021", company: "MediaTech", title: "SysAdmin → DevOps" },
+    ],
+    education: [{ degree: "Бакалавр", place: "IITU", field: "Computer Engineering" }],
+  },
+  {
+    id: "c7",
+    name: "Dana Kudaibergen",
+    profession: "Data Analyst / BI",
+    desiredSalary: "от 700 000 ₸",
+    country: "Казахстан",
+    city: "Астана",
+    experience: "2 года",
+    email: "dana.bi@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2023 — 2025", company: "Retail Analytics", title: "Data Analyst (SQL, Power BI, Python)" },
+    ],
+    education: [{ degree: "Бакалавр", place: "NU", field: "Mathematics" }],
+  },
+  {
+    id: "c8",
+    name: "Adil Rakhim",
+    profession: "SMM / Content",
+    desiredSalary: "от 350 000 ₸",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "1.5 года",
+    email: "adil.smm@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2024 — 2025", company: "Fashion Hub", title: "SMM Specialist" },
+      { period: "2023 — 2024", company: "Startup Media", title: "Content Creator" },
+    ],
+    education: [{ degree: "Бакалавр", place: "KazNU", field: "Журналистика" }],
+  },
+  {
+    id: "c9",
+    name: "Aruzhan Yesen",
+    profession: "QA Engineer",
+    desiredSalary: "от 600 000 ₸",
+    country: "Казахстан",
+    city: "Караганда",
+    experience: "3 года",
+    email: "aruzhan.qa@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2022 — 2025", company: "MobileSoft", title: "QA Engineer (Manual+API, Postman)" },
+    ],
+    education: [{ degree: "Бакалавр", place: "KarSU", field: "CS" }],
+  },
+  {
+    id: "c10",
+    name: "Samat Alimov",
+    profession: "Product Manager",
+    desiredSalary: "от 1 000 000 ₸",
+    country: "Казахстан",
+    city: "Астана",
+    experience: "4+ года",
+    email: "samat.pm@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2023 — 2025", company: "PayTech", title: "Product Manager" },
+      { period: "2021 — 2023", company: "Marketplace", title: "Associate PM" },
+    ],
+    education: [{ degree: "Бакалавр", place: "KIMEP", field: "Business & IT" }],
+  },
+  {
+    id: "c11",
+    name: "Aizada Utepova",
+    profession: "HR Generalist / Talent Acquisition",
+    desiredSalary: "от 550 000 ₸",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "2 года",
+    email: "aizada.hr@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2023 — 2025", company: "TechHub", title: "HR Generalist" },
+    ],
+    education: [{ degree: "Бакалавр", place: "ALMAU", field: "Human Resources" }],
+  },
+  {
+    id: "c12",
+    name: "Timur Bayandin",
+    profession: "Sales Manager (B2B)",
+    desiredSalary: "от 500 000 ₸ + бонус",
+    country: "Казахстан",
+    city: "Алматы",
+    experience: "3+ года",
+    email: "timur.sales@example.com",
+    resumeUrl: "#",
+    work: [
+      { period: "2022 — 2025", company: "SaaS Pro", title: "B2B Sales Manager (CRM, холодные/тёплые лиды)" },
+    ],
+    education: [{ degree: "Бакалавр", place: "KazGU", field: "Маркетинг" }],
+  },
 ];
 
 /* ========= HELPERS ========= */
 const clsx = (...xs) => xs.filter(Boolean).join(" ");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
 
-/* ========= АУТЕНТИФИКАЦИЯ (как в предыдущей версии, кратко) ========= */
+/* ========= AUTH ========= */
 function AuthModal({ open, onClose, onAuth }) {
   const [mode, setMode] = useState("login");
   const [firstName, setFirstName] = useState("");
@@ -112,7 +228,8 @@ function AuthModal({ open, onClose, onAuth }) {
 
   useEffect(() => {
     if (!open) return;
-    setMode("login"); setFirstName(""); setLastName(""); setBirth(""); setRole("applicant"); setEmail(""); setPass(""); setError("");
+    setMode("login"); setFirstName(""); setLastName(""); setBirth(""); setRole("applicant");
+    setEmail(""); setPass(""); setError("");
   }, [open]);
 
   if (!open) return null;
@@ -147,8 +264,8 @@ function AuthModal({ open, onClose, onAuth }) {
       <div className="auth-modal">
         <div className="auth-head">
           <div className="auth-tabs">
-            <button className={clsx("auth-tab", mode==="login" && "active")} onClick={()=>setMode("login")}>Вход</button>
-            <button className={clsx("auth-tab", mode==="register" && "active")} onClick={()=>setMode("register")}>Регистрация</button>
+            <button className={clsx("auth-tab", mode === "login" && "active")} onClick={() => setMode("login")}>Вход</button>
+            <button className={clsx("auth-tab", mode === "register" && "active")} onClick={() => setMode("register")}>Регистрация</button>
           </div>
           <button className="auth-close" onClick={onClose}>×</button>
         </div>
@@ -193,6 +310,110 @@ function AuthModal({ open, onClose, onAuth }) {
         .radio{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text)}
         .auth-error{color:#ef4444;background:#fef2f2;border:1px solid #fecaca;padding:8px 10px;border-radius:10px;font-size:13px;margin-bottom:8px}
       `}</style>
+    </div>
+  );
+}
+
+/* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» ========= */
+function AddCandidateModal({ open, onClose, onAdd }) {
+  const [name, setName] = useState("");
+  const [profession, setProfession] = useState("");
+  const [desiredSalary, setDesiredSalary] = useState("");
+  const [country, setCountry] = useState("Казахстан");
+  const [city, setCity] = useState("");
+  const [experience, setExperience] = useState("");
+  const [email, setEmail] = useState("");
+  const [resumeUrl, setResumeUrl] = useState("");
+  const [workText, setWorkText] = useState("");
+  const [eduText, setEduText] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setName(""); setProfession(""); setDesiredSalary("");
+    setCountry("Казахстан"); setCity(""); setExperience("");
+    setEmail(""); setResumeUrl(""); setWorkText(""); setEduText(""); setError("");
+  }, [open]);
+
+  if (!open) return null;
+
+  const parseWork = (txt) =>
+    txt.split("\n").map(s=>s.trim()).filter(Boolean).map(line=>{
+      // формат: period | company | title
+      const [period, company, title] = line.split("|").map(x=>x?.trim()||"");
+      return { period, company, title };
+    });
+
+  const parseEdu = (txt) =>
+    txt.split("\n").map(s=>s.trim()).filter(Boolean).map(line=>{
+      // формат: degree | place | field
+      const [degree, place, field] = line.split("|").map(x=>x?.trim()||"");
+      return { degree, place, field };
+    });
+
+  const submit = (e) => {
+    e.preventDefault();
+    setError("");
+    if (!name.trim()) return setError("Укажите ФИО");
+    if (!profession.trim()) return setError("Укажите профессию");
+    if (!city.trim()) return setError("Укажите город");
+    const c = {
+      id: "c_" + Math.random().toString(36).slice(2,9),
+      name: name.trim(),
+      profession: profession.trim(),
+      desiredSalary: desiredSalary.trim(),
+      country: country.trim(),
+      city: city.trim(),
+      experience: experience.trim(),
+      email: email.trim(),
+      resumeUrl: resumeUrl.trim(),
+      work: parseWork(workText),
+      education: parseEdu(eduText),
+    };
+    onAdd(c);
+    onClose();
+  };
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true">
+      <div className="auth-modal" style={{width:"min(820px,96vw)"}}>
+        <div className="auth-head">
+          <div style={{fontWeight:600}}>Добавить соискателя</div>
+          <button className="auth-close" onClick={onClose}>×</button>
+        </div>
+        <form className="auth-body" onSubmit={submit}>
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field"><label>ФИО*</label><input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Иван Иванов"/></div>
+            <div className="field"><label>Профессия*</label><input value={profession} onChange={(e)=>setProfession(e.target.value)} placeholder="Frontend Developer"/></div>
+            <div className="field"><label>Желаемая зарплата</label><input value={desiredSalary} onChange={(e)=>setDesiredSalary(e.target.value)} placeholder="от 500 000 ₸"/></div>
+            <div className="field"><label>Страна</label><input value={country} onChange={(e)=>setCountry(e.target.value)} placeholder="Казахстан"/></div>
+            <div className="field"><label>Город*</label><input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы"/></div>
+            <div className="field"><label>Опыт</label><input value={experience} onChange={(e)=>setExperience(e.target.value)} placeholder="2 года"/></div>
+            <div className="field"><label>Email</label><input value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="user@example.com"/></div>
+            <div className="field"><label>Ссылка на резюме (PDF/Drive)</label><input value={resumeUrl} onChange={(e)=>setResumeUrl(e.target.value)} placeholder="https://..."/></div>
+          </div>
+
+          <div className="field">
+            <label>Опыт работы (каждая строка: <strong>period | company | title</strong>)</label>
+            <textarea rows={6} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+              value={workText} onChange={(e)=>setWorkText(e.target.value)}
+              placeholder={`авг 2025 — наст. время | HRI Lab at Nazarbayev University | Research Assistant\nиюн 2025 — авг 2025 | nFactorial Incubator | Full-Stack Trainee`} />
+          </div>
+
+          <div className="field">
+            <label>Образование (каждая строка: <strong>degree | place | field</strong>)</label>
+            <textarea rows={4} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+              value={eduText} onChange={(e)=>setEduText(e.target.value)}
+              placeholder={`Бакалавр | Nazarbayev University | Computer Science`} />
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
+            <button type="submit" className="btn btn-primary">Сохранить</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
@@ -257,7 +478,6 @@ function CandidatePreview({ open, onClose, candidate }) {
         </div>
       </div>
 
-      {/* стили модалки переиспользуем */}
       <style jsx global>{`
         .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:60}
         .sb-modal{background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
@@ -271,7 +491,7 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= ЛОКАЛЬНЫЙ SMARTBOT (как раньше, можно опустить если не нужен сейчас) ========= */
+/* ========= ЛОКАЛЬНЫЙ SMARTBOT (как раньше, укорочено) ========= */
 function SmartBotModal({ open, onClose, job }) {
   const [step, setStep] = useState(0);
   const [candidate, setCandidate] = useState({ name: "", city: "", exp: "", format: "" });
@@ -372,7 +592,7 @@ function SmartBotModal({ open, onClose, job }) {
   );
 }
 
-/* ========= ТАБЛИЦА ОТКЛИКОВ ДЛЯ РАБОТОДАТЕЛЯ (как было) ========= */
+/* ========= ТАБЛИЦА ОТКЛИКОВ ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
   const load = () => {
@@ -421,19 +641,36 @@ export default function Page() {
   const [job, setJob] = useState(JOBS[0]);
   const [authOpen, setAuthOpen] = useState(false);
   const [user, setUser] = useState(null);
-  const [q, setQ] = useState("");                  // поиск (универсальный)
+  const [q, setQ] = useState("");
   const [candOpen, setCandOpen] = useState(false);
   const [cand, setCand] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [candidates, setCandidates] = useState(SEED_CANDIDATES);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
     setTheme(savedTheme);
     document.body.setAttribute("data-theme", savedTheme);
+
+    // инициализация кандидатов из localStorage
+    const saved = localStorage.getItem("jb_candidates");
+    if (saved) {
+      try { setCandidates(JSON.parse(saved)); } catch { setCandidates(SEED_CANDIDATES); }
+    } else {
+      localStorage.setItem("jb_candidates", JSON.stringify(SEED_CANDIDATES));
+      setCandidates(SEED_CANDIDATES);
+    }
+
     const cur = localStorage.getItem("jb_current");
     if (cur) {
       try { const u = JSON.parse(cur); setUser(u); if (u.role === "applicant") setView("jobs"); } catch {}
     }
   }, []);
+
+  const persistCandidates = (arr) => {
+    setCandidates(arr);
+    localStorage.setItem("jb_candidates", JSON.stringify(arr));
+  };
 
   const switchTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -445,24 +682,27 @@ export default function Page() {
   const openSmartBot = (j) => { setJob(j); setModalOpen(true); };
   const logout = () => { localStorage.removeItem("jb_current"); setUser(null); setView("jobs"); };
 
-  // поиск — в зависимости от выбранного режима
+  // поиск
   const filteredJobs = useMemo(() => {
     const t = q.trim().toLowerCase();
     if (!t) return JOBS;
-    return JOBS.filter((j) =>
-      [j.title, j.city, j.format, j.exp, j.salary].join(" ").toLowerCase().includes(t)
-    );
+    return JOBS.filter((j) => [j.title, j.city, j.format, j.exp, j.salary].join(" ").toLowerCase().includes(t));
   }, [q]);
 
   const filteredCandidates = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return CANDIDATES;
-    return CANDIDATES.filter((c) =>
+    if (!t) return candidates;
+    return candidates.filter((c) =>
       [c.name, c.profession, c.country, c.city, c.desiredSalary, c.experience].join(" ").toLowerCase().includes(t)
     );
-  }, [q]);
+  }, [q, candidates]);
 
   const canSeeEmployer = !user || user.role === "employer";
+
+  const handleAddCandidate = (c) => {
+    const next = [c, ...candidates];
+    persistCandidates(next);
+  };
 
   return (
     <>
@@ -471,36 +711,27 @@ export default function Page() {
         <div className="header-inner">
           <div className="logo">JobBoard</div>
 
-          {/* Переключатель режима */}
           <div className="mode">
             <button className={clsx("seg", mode==="find_job" && "seg-active")} onClick={()=>setMode("find_job")}>Найти работу</button>
             <button className={clsx("seg", mode==="find_employee" && "seg-active")} onClick={()=>setMode("find_employee")}>Найти сотрудника</button>
           </div>
 
-          {/* Поиск */}
           <div className="search">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={mode==="find_job" ? "Поиск вакансий…" : "Поиск по соискателям…"}
-            />
+            <input value={q} onChange={(e)=>setQ(e.target.value)} placeholder={mode==="find_job" ? "Поиск вакансий…" : "Поиск по соискателям…"} />
           </div>
 
-          {/* Нав / профиль */}
           <div className="nav">
-            <button className={clsx(view === "jobs" && "active")} onClick={() => setView("jobs")}>Вакансии</button>
-            {canSeeEmployer && (
-              <button className={clsx(view === "employer" && "active")} onClick={() => setView("employer")}>Работодатель</button>
-            )}
+            <button className={clsx(view==="jobs"&&"active")} onClick={()=>setView("jobs")}>Вакансии</button>
+            {canSeeEmployer && <button className={clsx(view==="employer"&&"active")} onClick={()=>setView("employer")}>Работодатель</button>}
             <button onClick={switchTheme} title="Светлая/тёмная тема">Тема</button>
             {!user ? (
-              <button className="btn btn-outline" onClick={() => setAuthOpen(true)}>Войти</button>
+              <button className="btn btn-outline" onClick={()=>setAuthOpen(true)}>Войти</button>
             ) : (
               <div className="userbox">
-                <div className="avatar">{(user.firstName || "U").slice(0,1).toUpperCase()}</div>
+                <div className="avatar">{(user.firstName||"U").slice(0,1).toUpperCase()}</div>
                 <div className="uinfo">
                   <div className="uname">{user.firstName} {user.lastName}</div>
-                  <div className="umail">{user.email} • {user.role === "employer" ? "Работодатель" : "Соискатель"}</div>
+                  <div className="umail">{user.email} • {user.role==="employer"?"Работодатель":"Соискатель"}</div>
                 </div>
                 <button className="btn btn-outline" onClick={logout}>Выход</button>
               </div>
@@ -516,13 +747,13 @@ export default function Page() {
             <h1>{mode==="find_job" ? "Найдите работу мечты" : "Найдите подходящего сотрудника"}</h1>
             <p>{mode==="find_job"
               ? "Лаконичный интерфейс, быстрый отклик и умный скрининг через SmartBot."
-              : "Смотрите карточки соискателей, открывайте резюме и изучайте опыт."}
+              : "Смотрите карточки соискателей, открывайте резюме и изучайте опыт. Работодатели могут добавлять новых соискателей."}
             </p>
           </div>
           <div className="pill">Демо-версия (фронтенд only)</div>
         </section>
 
-        {/* === РЕЖИМ «НАЙТИ РАБОТУ» === */}
+        {/* === Найти работу === */}
         {mode === "find_job" && (
           <>
             {view === "jobs" && (
@@ -567,9 +798,16 @@ export default function Page() {
           </>
         )}
 
-        {/* === РЕЖИМ «НАЙТИ СОТРУДНИКА» === */}
+        {/* === Найти сотрудника === */}
         {mode === "find_employee" && (
           <section>
+            <div className="card" style={{marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+              <div className="title" style={{margin:0}}>Список соискателей</div>
+              {user?.role === "employer" && (
+                <button className="btn btn-primary" onClick={()=>setAddOpen(true)}>Добавить соискателя</button>
+              )}
+            </div>
+
             {filteredCandidates.length === 0 ? (
               <div className="card" style={{ color: "var(--muted)" }}>Соискатели не найдены.</div>
             ) : (
@@ -600,15 +838,20 @@ export default function Page() {
           </section>
         )}
 
-        <p className="foot">© 2025 JobBoard Demo. Данные на странице — демонстрационные.</p>
+        <p className="foot">© 2025 JobBoard Demo. Данные на странице — демонстрационные (кандидаты сохраняются в вашем браузере).</p>
       </div>
 
       {/* Модалки */}
       <SmartBotModal open={modalOpen} job={job} onClose={()=>setModalOpen(false)} />
       <AuthModal open={authOpen} onClose={()=>setAuthOpen(false)} onAuth={(u)=>{ setUser(u); if(u.role==="applicant") setView("jobs"); }} />
       <CandidatePreview open={candOpen} onClose={()=>setCandOpen(false)} candidate={cand} />
+      <AddCandidateModal
+        open={addOpen}
+        onClose={()=>setAddOpen(false)}
+        onAdd={(c)=>handleAddCandidate(c)}
+      />
 
-      {/* Глобальные стили */}
+      {/* Стили */}
       <style jsx global>{`
         :root{
           --bg:#f6f8fb; --card:#fff; --text:#0f172a; --muted:#64748b; --brand:#2563eb; --brand-600:#1e4ed8; --line:#e2e8f0; --pill:#eff6ff;
@@ -666,6 +909,7 @@ export default function Page() {
         .table tr:nth-child(even){background:var(--table-stripe)}
         .badge{padding:4px 8px;border-radius:999px;font-weight:600;font-size:12px;color:#fff}
         .b-good{background:#10b981}.b-warn{background:#f59e0b}.b-bad{background:#ef4444}
+        .grid .field{display:flex;flex-direction:column;gap:6px}
       `}</style>
     </>
   );
