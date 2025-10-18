@@ -6,18 +6,43 @@ const JOBS = [
   { id: 2, title: "Маркетолог Performance", city: "Астана", exp: "от 3 лет", format:"Гибрид", salary:"от 600 000 ₸" }
 ];
 
-export default function Page(){
+export default function Page() {
   const [selectedJob, setSelectedJob] = useState(null);
 
-  const openSmartBot = (job) => {
+  // Подключаем public/smartbot-widget.js как обычный <script>, а не как модуль
+  const ensureSmartBotLoaded = () =>
+    new Promise((resolve, reject) => {
+      if (typeof window !== "undefined" && window.openSmartBotModal) return resolve();
+
+      const id = "sb-widget";
+      // если тег уже добавлен — ждём инициализации
+      if (document.getElementById(id)) {
+        const check = setInterval(() => {
+          if (window.openSmartBotModal) {
+            clearInterval(check);
+            resolve();
+          }
+        }, 50);
+        setTimeout(() => { clearInterval(check); reject(new Error("SmartBot load timeout")); }, 5000);
+        return;
+      }
+
+      const s = document.createElement("script");
+      s.id = id;
+      s.src = "/smartbot-widget.js"; // лежит в /public
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("SmartBot script failed to load"));
+      document.body.appendChild(s);
+    });
+
+  const openSmartBot = async (job) => {
     setSelectedJob(job);
-    // ленивое подключение виджета (ниже — файл public/smartbot-widget.js)
-    import("/smartbot-widget.js").then(({ openSmartBotModal }) => {
-      openSmartBotModal({
-        job,
-        title: "🤖 SmartBot — быстрый скрининг",
-        onClose: () => setSelectedJob(null)
-      });
+    await ensureSmartBotLoaded();
+    window.openSmartBotModal({
+      job,
+      title: "🤖 SmartBot — быстрый скрининг",
+      onClose: () => setSelectedJob(null)
     });
   };
 
@@ -34,14 +59,15 @@ export default function Page(){
           </div>
           <div className="mt-4 flex gap-2">
             <button
-              className="px-4 py-2 rounded-xl bg-[var(--brand)] text-white hover:brightness-95"
+              className="px-4 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
               onClick={() => openSmartBot(job)}
             >
               Откликнуться
             </button>
-            <a className="px-4 py-2 rounded-xl border border-[var(--brand)] text-[var(--brand)] hover:bg-blue-50"
-               href="#"
-               onClick={(e)=>{e.preventDefault(); openSmartBot(job)}}
+            <a
+              href="#"
+              onClick={(e)=>{e.preventDefault(); openSmartBot(job);}}
+              className="px-4 py-2 rounded-xl border border-blue-600 text-blue-700 hover:bg-blue-50"
             >
               Быстрый отклик
             </a>
