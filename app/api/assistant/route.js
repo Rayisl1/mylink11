@@ -4,8 +4,8 @@ export const runtime = "edge";
 const MODEL = "gemini-2.5-flash"; // быстрая модель Gemini
 
 // ──────────────────────────────────────────────
-// Простая in-memory память (для MVP)
-// В продакшене можно заменить на Vercel KV / Supabase
+// Простая in-memory память (для MVP).
+// В продакшене замените на Vercel KV / Supabase / DB.
 const mem = new Map();
 
 /** @typedef {{
@@ -37,7 +37,7 @@ function patchMemory(id, patch) {
 // ──────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `
-Ты — виртуальный HR-менеджер компании  по вакансии {{vacancy_title}}.
+Ты — виртуальный HR-менеджер компании по вакансии {{vacancy_title}}.
 Общайся вежливо, дружелюбно и поддерживающе, но сохраняй академический стиль и деловую структуру.
 Отвечай кратко (1–3 предложения), задавай ровно ОДИН уточняющий вопрос за раз. Факты не выдумывай.
 
@@ -93,11 +93,7 @@ const SYSTEM_PROMPT = `
 `;
 
 function safeParseJSON(t) {
-  try {
-    return JSON.parse(t);
-  } catch {
-    return null;
-  }
+  try { return JSON.parse(t); } catch { return null; }
 }
 
 function j(status, data) {
@@ -110,8 +106,7 @@ function j(status, data) {
 export async function POST(req) {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey)
-      return j(500, { ok: false, error: "GEMINI_API_KEY is missing" });
+    if (!apiKey) return j(500, { ok: false, error: "GEMINI_API_KEY is missing" });
 
     const {
       history = [],
@@ -119,11 +114,10 @@ export async function POST(req) {
       profile = {},
       conversationId = "default",
     } = await req.json();
-    if (contents.length === 0) {
-  contents.push({ role: "user", parts: [{ text: "INIT" }] });
-}
+
     const memory = getMemory(conversationId);
 
+    // Контекст (без синтаксических ошибок)
     const contextBlock = `
 Компания: ${vacancy.company || "-"}
 Сфера/продукт: ${vacancy.industry || vacancy.product || "-"}
@@ -137,16 +131,18 @@ export async function POST(req) {
 Выбранный язык: ${memory.language || "-"}
 `.trim();
 
+    // Сборка contents. Фильтруем пустые строки и ГАРАНТИРУЕМ не-пустоту.
     const contents = [];
     for (const m of history) {
+      const text = (m?.content ?? "").toString().trim();
+      if (!text) continue;
       contents.push({
         role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }],
+        parts: [{ text }],
       });
     }
-
-    // Если диалог новый и язык не выбран — инициализация
-    if (history.length === 0 && !memory.language) {
+    if (contents.length === 0) {
+      // Первый заход или пустые сообщения — кладём INIT.
       contents.push({ role: "user", parts: [{ text: "INIT" }] });
     }
 
@@ -186,6 +182,7 @@ export async function POST(req) {
       data?.candidates?.[0]?.content?.parts?.[0]?.text ??
       data?.candidates?.[0]?.content?.parts?.[0]?.functionCall?.argsText ??
       "";
+
     const parsed = safeParseJSON(text);
 
     const isValid =
@@ -193,6 +190,7 @@ export async function POST(req) {
       typeof parsed.reply === "string" &&
       (parsed.next_action === "ask" || parsed.next_action === "finish");
 
+    // Фолбэк: если модель не вернула JSON в нужном формате — показываем выбор языка.
     if (!isValid) {
       const companyName = vacancy.company || "Компания";
       const role = vacancy.title ? `: ${vacancy.title}` : "";
@@ -204,17 +202,16 @@ export async function POST(req) {
       });
     }
 
+    // Обновляем память, если пришёл memory_patch
     if (parsed.memory_patch && typeof parsed.memory_patch === "object") {
       patchMemory(conversationId, parsed.memory_patch);
     } else {
+      // Если язык ещё не выбран, пытаемся определить по реплике
       const rep = parsed.reply || "";
       if (!memory.language) {
-        if (/Қазақша/i.test(rep))
-          patchMemory(conversationId, { language: "Қазақша" });
-        else if (/English/i.test(rep))
-          patchMemory(conversationId, { language: "English" });
-        else if (/[А-Яа-яЁё]/.test(rep))
-          patchMemory(conversationId, { language: "Русский" });
+        if (/Қазақша/i.test(rep)) patchMemory(conversationId, { language: "Қазақша" });
+        else if (/English/i.test(rep)) patchMemory(conversationId, { language: "English" });
+        else if (/[А-Яа-яЁё]/.test(rep)) patchMemory(conversationId, { language: "Русский" });
       }
     }
 
@@ -227,4 +224,3 @@ export async function POST(req) {
     return j(500, { ok: false, error: e?.message || String(e) });
   }
 }
-//123
