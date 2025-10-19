@@ -119,7 +119,9 @@ export async function POST(req) {
       profile = {},
       conversationId = "default",
     } = await req.json();
-
+    if (contents.length === 0) {
+  contents.push({ role: "user", parts: [{ text: "INIT" }] });
+}
     const memory = getMemory(conversationId);
 
     const contextBlock = `
