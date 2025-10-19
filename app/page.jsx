@@ -659,7 +659,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
-
+  
   // ====== Автоформула релевантности ======
   function parseYears(text){ if(!text) return 0; const m=String(text).match(/(\d+(\.\d+)?)/); return m?Number(m[1]):0; }
   function scoreKeywordMatch(candidate, job){

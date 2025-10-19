@@ -5,29 +5,25 @@ const MODEL = "gemini-2.5-flash"; // быстрая модель Gemini
 
 // ──────────────────────────────────────────────
 // Простая in-memory память (для MVP).
-// В продакшене замените на Vercel KV / Supabase / DB.
 const mem = new Map();
 
-/** @typedef {{
- *  language?: "Русский"|"Қазақша"|"English",
- *  city?: string,
- *  relocation?: string,
- *  format?: string,
- *  availability?: string,
- *  experience?: string,
- *  hard_skills?: string,
- *  english?: string,
- *  education?: string,
- *  salary?: string,
- *  motivation?: string,
- *  company_questions?: string,
- *  available_from?: string
- * }} Memory
+/** @typedef {Object} Memory
+ * @property {"Русский"|"Қазақша"|"English"} [language]
+ * @property {string} [city]
+ * @property {string} [relocation]
+ * @property {string} [format]
+ * @property {string} [availability]
+ * @property {string} [experience]
+ * @property {string} [hard_skills]
+ * @property {string} [english]
+ * @property {string} [education]
+ * @property {string} [salary]
+ * @property {string} [motivation]
+ * @property {string} [company_questions]
+ * @property {string} [available_from]
  */
 
-function getMemory(id) {
-  return mem.get(id) || {};
-}
+function getMemory(id) { return mem.get(id) || {}; }
 function patchMemory(id, patch) {
   const cur = mem.get(id) || {};
   const next = { ...cur, ...patch };
@@ -35,6 +31,79 @@ function patchMemory(id, patch) {
   return next;
 }
 // ──────────────────────────────────────────────
+
+// ========== NEW: утилиты скоринга (похожи на фронт) ==========
+function parseYears(text){ if(!text) return 0; const m=String(text).match(/(\d+(\.\d+)?)/); return m?Number(m[1]):0; }
+
+function scoreKeywordMatch(profession, jobTitle){
+  const jt=(jobTitle||"").toLowerCase();
+  const pf=(profession||"").toLowerCase();
+  if(!jt || !pf) return 0;
+  let s=0;
+  if(pf.includes(jt)||jt.includes(pf)) s+=40;
+  const keywords=jt.split(/\W+/).filter(Boolean);
+  let matches=0; for(const k of keywords) if(pf.includes(k)) matches++;
+  s+=Math.min(30, matches*6);
+  return s;
+}
+
+function inferRequiredYears(jobExp){
+  if(!jobExp) return 0;
+  const m=String(jobExp).match(/(\d+)/);
+  if(m) return Number(m[1]);
+  if(/senior/i.test(jobExp)) return 5;
+  if(/middle\+?/i.test(jobExp)) return 3;
+  if(/middle/i.test(jobExp)) return 2;
+  if(/junior/i.test(jobExp)) return 0.5;
+  return 0;
+}
+
+function computeAutoScoreServer({memory, vacancy, profile}) {
+  let score = 50;
+
+  // Город
+  if (memory.city && vacancy.city && memory.city.toLowerCase() === String(vacancy.city).toLowerCase()) {
+    score += 15;
+  }
+
+  // Ключевые слова (профессия vs название вакансии)
+  const profession = profile?.profession || memory?.profession || memory?.hard_skills || "";
+  score += scoreKeywordMatch(profession, vacancy.title);
+
+  // Опыт
+  const candYears = parseYears(memory.experience);
+  const requiredYears = inferRequiredYears(vacancy.exp);
+  if (requiredYears > 0) {
+    if (candYears >= requiredYears) score += 15;
+    else score -= Math.min(20, (requiredYears - candYears) * 6);
+  }
+
+  // Формат
+  if (memory.format && vacancy.format && memory.format.toLowerCase().includes(String(vacancy.format).toLowerCase())) {
+    score += 5;
+  }
+
+  return Math.round(Math.max(0, Math.min(100, score)));
+}
+
+function explainGapServer({memory, vacancy, score}) {
+  const issues = [];
+  if (memory.city && vacancy.city && memory.city.toLowerCase() !== String(vacancy.city).toLowerCase()) {
+    issues.push("Город отличается");
+  }
+  const candYears = parseYears(memory.experience);
+  const req = inferRequiredYears(vacancy.exp);
+  if (req && candYears < req) {
+    issues.push(`Опыт ниже требований (${candYears} < ${req} лет)`);
+  }
+  const jt=(vacancy.title||"").toLowerCase();
+  const pf=(memory.hard_skills||"").toLowerCase();
+  if (jt && pf && !(pf.includes(jt)||jt.includes(pf))) {
+    issues.push("Профиль по ключевым словам не совпадает с вакансией");
+  }
+  return issues.length ? "Почему не 100%: " + issues.join("; ") + "." : "";
+}
+// ========== /NEW ==========
 
 const SYSTEM_PROMPT = `
 Ты — виртуальный HR-менеджер компании по вакансии {{vacancy_title}}.
@@ -117,7 +186,6 @@ export async function POST(req) {
 
     const memory = getMemory(conversationId);
 
-    // Контекст (без синтаксических ошибок)
     const contextBlock = `
 Компания: ${vacancy.company || "-"}
 Сфера/продукт: ${vacancy.industry || vacancy.product || "-"}
@@ -131,7 +199,7 @@ export async function POST(req) {
 Выбранный язык: ${memory.language || "-"}
 `.trim();
 
-    // Сборка contents. Фильтруем пустые строки и ГАРАНТИРУЕМ не-пустоту.
+    // Сборка contents
     const contents = [];
     for (const m of history) {
       const text = (m?.content ?? "").toString().trim();
@@ -141,10 +209,7 @@ export async function POST(req) {
         parts: [{ text }],
       });
     }
-    if (contents.length === 0) {
-      // Первый заход или пустые сообщения — кладём INIT.
-      contents.push({ role: "user", parts: [{ text: "INIT" }] });
-    }
+    if (contents.length === 0) contents.push({ role: "user", parts: [{ text: "INIT" }] });
 
     const system = SYSTEM_PROMPT
       .replaceAll("{{company_name}}", vacancy.company || "Компания")
@@ -172,10 +237,7 @@ export async function POST(req) {
 
     const data = await r.json();
     if (!r.ok) {
-      return j(r.status, {
-        ok: false,
-        error: data?.error?.message || "Gemini error",
-      });
+      return j(r.status, { ok: false, error: data?.error?.message || "Gemini error" });
     }
 
     const text =
@@ -190,7 +252,6 @@ export async function POST(req) {
       typeof parsed.reply === "string" &&
       (parsed.next_action === "ask" || parsed.next_action === "finish");
 
-    // Фолбэк: если модель не вернула JSON в нужном формате — показываем выбор языка.
     if (!isValid) {
       const companyName = vacancy.company || "Компания";
       const role = vacancy.title ? `: ${vacancy.title}` : "";
@@ -202,11 +263,11 @@ export async function POST(req) {
       });
     }
 
-    // Обновляем память, если пришёл memory_patch
+    // Обновляем память
     if (parsed.memory_patch && typeof parsed.memory_patch === "object") {
       patchMemory(conversationId, parsed.memory_patch);
     } else {
-      // Если язык ещё не выбран, пытаемся определить по реплике
+      // Эвристика языка
       const rep = parsed.reply || "";
       if (!memory.language) {
         if (/Қазақша/i.test(rep)) patchMemory(conversationId, { language: "Қазақша" });
@@ -215,10 +276,26 @@ export async function POST(req) {
       }
     }
 
+    // NEW: формируем signals из актуальной памяти
+    const memNow = getMemory(conversationId);
+    const signals = {
+      city: memNow.city || "-",
+      exp:  memNow.experience || "-",
+      format: memNow.format || "-",
+    };
+
+    // NEW: считаем итог, когда это уместно (или делаем best-effort)
+    const finalScore = computeAutoScoreServer({ memory: memNow, vacancy, profile });
+    const whyNot = explainGapServer({ memory: memNow, vacancy, score: finalScore });
+
+    // Если модель явно говорит «finish», фронт воспримет как окончание скрининга.
     return j(200, {
       ok: true,
       reply: parsed.reply,
       next_action: parsed.next_action,
+      signals,                 // ← ждёт фронт
+      final_score: finalScore, // ← ждёт фронт
+      why_not: whyNot,         // ← ждёт фронт
     });
   } catch (e) {
     return j(500, { ok: false, error: e?.message || String(e) });
