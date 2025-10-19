@@ -16,4 +16,7 @@ html,body{ height:100% }
 .btn-small:hover {
   background: var(--primary-hover);
 }
+/* аккуратная маленькая кнопка — если захочешь использовать */
+.btn-small{padding:6px 10px;border-radius:10px;border:1px solid var(--brand);background:transparent;color:var(--brand);font-weight:600;cursor:pointer}
+.btn-small:hover{background:rgba(37,99,235,.08)}
 

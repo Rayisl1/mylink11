@@ -843,18 +843,20 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 }
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
+/* ========= ТАБЛИЦА ОТКЛИКОВ (обновить/очистить/скачать PDF + анализ) ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
+  const [selected, setSelected] = useState(null); // ← для модалки анализа
 
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
       .slice()
-      .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     setRows(data);
   };
-  useEffect(()=>{ load(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const tone = (s)=> (s>=80?"b-good":s>=60?"b-warn":"b-bad");
+  const tone = (s) => (s >= 80 ? "b-good" : s >= 60 ? "b-warn" : "b-bad");
 
   const clearAll = () => {
     if (!confirm("Очистить все результаты SmartBot?")) return;
@@ -873,9 +875,10 @@ function EmployerTable() {
   body{font-family:Arial, sans-serif; padding:24px; color:#111;}
   h1{margin:0 0 16px 0; font-size:20px}
   table{border-collapse:collapse; width:100%}
-  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
+  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left; vertical-align:top}
   th{background:#f3f4f6}
   .right{text-align:right}
+  .muted{color:#666}
 </style>
 </head>
 <body>
@@ -884,96 +887,31 @@ function EmployerTable() {
     Сформировано: ${new Date().toLocaleString()}
   </div>
   <table>
-  {selectedAnalysis && (
-  <div
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.4)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }}
-    onClick={() => setSelectedAnalysis(null)}
-  >
-    <div
-      style={{
-        background: "white",
-        borderRadius: 12,
-        padding: 24,
-        width: "90%",
-        maxWidth: 600,
-        color: "black",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <h2>Анализ кандидата</h2>
-      <p><b>Имя:</b> {selectedAnalysis.name}</p>
-      <p><b>Email:</b> {selectedAnalysis.email || "-"}</p>
-      <p><b>Город:</b> {selectedAnalysis.city || "-"}</p>
-      <p><b>Опыт:</b> {selectedAnalysis.exp || "-"}</p>
-      <p><b>Формат:</b> {selectedAnalysis.format || "-"}</p>
-      <p><b>Оценка релевантности:</b> {selectedAnalysis.score || 0}%</p>
-
-      {selectedAnalysis.why ? (
-        <div style={{ marginTop: 12 }}>
-          <b>Почему не 100%:</b>
-          <p style={{ whiteSpace: "pre-line", marginTop: 4 }}>
-            {selectedAnalysis.why}
-          </p>
-        </div>
-      ) : (
-        <p style={{ color: "gray" }}>Без комментария SmartBot</p>
-      )}
-
-      <button
-        onClick={() => setSelectedAnalysis(null)}
-        style={{
-          marginTop: 20,
-          background: "#0070f3",
-          color: "white",
-          border: "none",
-          borderRadius: 8,
-          padding: "8px 16px",
-          cursor: "pointer",
-        }}
-      >
-        Закрыть
-      </button>
-    </div>
-  </div>
-)}
-  
-  <thead>
-  <tr>
-    <th>Имя</th>
-    <th>Email</th>
-    <th>Вакансия</th>
-    <th>Релевантность</th>
-    <th>Индикатор</th>
-    <th>Комментарий</th> {/* ← новая */}
-    <th>Дата</th>
-  </tr>
-</thead>
+    <thead>
+      <tr>
+        <th>Имя</th>
+        <th>Email</th>
+        <th>Вакансия</th>
+        <th class="right">Релевантность</th>
+        <th>Город</th>
+        <th>Опыт</th>
+        <th>Анализ (почему не 100%)</th>
+        <th>Дата</th>
+      </tr>
+    </thead>
     <tbody>
-  ${rows.map(r=>`
-    <tr>
-      <td>${esc(r.name)}</td>
-      <td>${esc(r.email||"-")}</td>
-      <td>${esc(r.jobTitle||"")}</td>
-      <td class="right">${Number(r.score)||0}%</td>
-      <td>${esc(r.city||"-")}</td>
-      <td>${esc(r.exp||"-")}</td>
-      <td>${esc(r.format||"-")}</td>
-      <td style="max-width:320px; white-space:normal;">
-        ${r.why ? esc(r.why) : (Number(r.score) >= 80 ? "— Причины не указаны" : "—")}
-      </td>
-      <td>${new Date(r.date).toLocaleString()}</td>
-    </tr>
-  `).join("")}
-</tbody>
-
+      ${rows.map(r=>`
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.email||"-")}</td>
+          <td>${esc(r.jobTitle||"")}</td>
+          <td class="right">${Number(r.score)||0}%</td>
+          <td>${esc(r.city||"-")}</td>
+          <td>${esc(r.exp||"-")}</td>
+          <td class="muted">${esc(r.why || r.analysis?.gaps || "-")}</td>
+          <td>${new Date(r.date).toLocaleString()}</td>
+        </tr>`).join("")}
+    </tbody>
   </table>
   <script>window.print();</script>
 </body>
@@ -983,7 +921,18 @@ function EmployerTable() {
     w.document.write(html);
     w.document.close();
   };
-const [selectedAnalysis, setSelectedAnalysis] = useState(null);
+
+  // Безопасная подстановка анализа, если его нет в сохранении
+  const buildFallbackWhy = (r) => {
+    const s = Number(r.score || 0);
+    const missing = Math.max(0, 100 - s);
+    const bits = [];
+    if (!r.city) bits.push("не указан город");
+    if (!r.exp) bits.push("не указан опыт");
+    if (!r.format) bits.push("не указан формат работы");
+    if (s < 80) bits.push("часть навыков не совпадает с требованиями вакансии");
+    return `Недокуплено ~${missing}% по сигналам: ${bits.join(", ") || "недостаточно данных"}.`;
+  };
 
   return (
     <div className="card">
@@ -995,27 +944,126 @@ const [selectedAnalysis, setSelectedAnalysis] = useState(null);
 
       <div style={{ overflow: "auto" }}>
         <table className="table">
-          <thead><tr><th>Имя</th><th>Email</th><th>Вакансия</th><th>Релевантность</th><th>Индикатор</th><th>Дата</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Имя</th>
+              <th>Email</th>
+              <th>Вакансия</th>
+              <th>Релевантность</th>
+              <th>Индикатор</th>
+              <th>Дата</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
           <tbody>
             {!rows.length ? (
-              <tr><td colSpan={6} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
+              <tr>
+                <td colSpan={7} style={{textAlign:"center", color:"var(--muted)", padding:18}}>
+                  Пока нет данных
+                </td>
+              </tr>
             ) : rows.map((r,i)=>(
               <tr key={i}>
                 <td>{esc(r.name)}</td>
                 <td>{esc(r.email||"-")}</td>
                 <td>{esc(r.jobTitle||"")}</td>
-                <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
                 <td>
-                  <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
+                  <span className={clsx("badge", tone(Number(r.score)||0))}>
+                    {Number(r.score)||0}%
+                  </span>
+                </td>
+                <td>
+                  <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:160}}>
                     <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
                   </div>
                 </td>
-                <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
+                <td style={{fontSize:12, color:"var(--muted)"}}>
+                  {new Date(r.date).toLocaleString()}
+                </td>
+                <td>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => setSelected({
+                      ...r,
+                      why: r.why || r.analysis?.gaps || buildFallbackWhy(r),
+                      strengths: r.analysis?.strengths || r.strengths || "",
+                      notes: r.analysis?.notes || r.notes || ""
+                    })}
+                  >
+                    Показать анализ
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* ===== МОДАЛКА АНАЛИЗА ===== */}
+      {selected && (
+        <div className="an-backdrop" role="dialog" aria-modal="true" onClick={()=>setSelected(null)}>
+          <div className="an-modal" onClick={(e)=>e.stopPropagation()}>
+            <div className="an-head">
+              <div className="an-title">Анализ кандидата SmartBot</div>
+              <button className="an-close" onClick={()=>setSelected(null)}>×</button>
+            </div>
+            <div className="an-body">
+              <div className="an-row">
+                <div><b>Имя:</b> {selected.name}</div>
+                <div><b>Email:</b> {selected.email || "-"}</div>
+              </div>
+              <div className="an-row">
+                <div><b>Вакансия:</b> {selected.jobTitle || "-"}</div>
+                <div><b>Оценка:</b> <span className={clsx("badge", tone(Number(selected.score)||0))}>{Number(selected.score)||0}%</span></div>
+              </div>
+              <div className="an-row">
+                <div><b>Город:</b> {selected.city || "-"}</div>
+                <div><b>Опыт:</b> {selected.exp || "-"}</div>
+              </div>
+
+              {selected.strengths && (
+                <div className="an-block">
+                  <div className="an-sub">Сильные стороны</div>
+                  <div className="an-text">{selected.strengths}</div>
+                </div>
+              )}
+
+              <div className="an-block">
+                <div className="an-sub">Почему не 100%</div>
+                <div className="an-text">{selected.why}</div>
+              </div>
+
+              {selected.notes && (
+                <div className="an-block">
+                  <div className="an-sub">Заметки</div>
+                  <div className="an-text">{selected.notes}</div>
+                </div>
+              )}
+
+              <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:10}}>
+                <button className="btn btn-outline" onClick={()=>setSelected(null)}>Закрыть</button>
+              </div>
+            </div>
+          </div>
+
+          {/* локальные стили модалки */}
+          <style jsx global>{`
+            .an-backdrop{position:fixed;inset:0;background:rgba(2,8,23,.45);display:flex;align-items:center;justify-content:center;z-index:80}
+            .an-modal{width:min(720px,95vw);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.28);overflow:hidden}
+            .an-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
+            [data-theme="dark"] .an-head{background:#0b1424}
+            .an-title{font-weight:600}
+            .an-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
+            .an-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+            .an-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+            @media (max-width:720px){.an-row{grid-template-columns:1fr}}
+            .an-block{background:rgba(37,99,235,.06);border:1px dashed rgba(37,99,235,.25);padding:10px;border-radius:12px}
+            [data-theme="dark"] .an-block{background:#0d1a33;border-color:#1b3b7a}
+            .an-sub{font-weight:700;margin-bottom:6px}
+            .an-text{white-space:pre-line;color:var(--text)}
+          `}</style>
+        </div>
+      )}
     </div>
   );
 }
