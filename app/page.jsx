@@ -136,6 +136,7 @@ function AuthModal({ open, onClose, onAuth }) {
   );
 }
 /* ========= МОДАЛКА «ДОБАВИТЬ ВАКАНСИЮ» ========= */
+/* ========= МОДАЛКА «ДОБАВИТЬ ВАКАНСИЮ» (с таким же дизайном) ========= */
 function AddJobModal({ open, onClose, onAdd }) {
   const [title, setTitle] = useState("");
   const [city, setCity] = useState("");
@@ -146,6 +147,7 @@ function AddJobModal({ open, onClose, onAdd }) {
   const [requirements, setRequirements] = useState(""); // «требования»
   const [error, setError] = useState("");
 
+  // блокируем прокрутку страницы, когда модалка открыта
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -153,12 +155,14 @@ function AddJobModal({ open, onClose, onAdd }) {
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
+  // reset полей при каждом открытии
   useEffect(() => {
     if (!open) return;
     setTitle(""); setCity(""); setExp(""); setFormat("");
     setSalary(""); setDuties(""); setRequirements(""); setError("");
   }, [open]);
 
+  // закрытие по Esc
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -188,14 +192,21 @@ function AddJobModal({ open, onClose, onAdd }) {
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addjob-title"
-         onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}>
+    <div
+      className="modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="addjob-title"
+      onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}
+    >
       <div className="modal-shell" role="document">
+        {/* Header */}
         <div className="modal-head">
           <div className="modal-title" id="addjob-title">Добавить вакансию</div>
-          <button className="icon-close" onClick={onClose}>×</button>
+          <button className="icon-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
 
+        {/* Body (прокручиваемая) */}
         <form className="modal-body" onSubmit={submit}>
           <div className="grid-2">
             <div className="field">
@@ -234,15 +245,82 @@ function AddJobModal({ open, onClose, onAdd }) {
 
           {error && <div className="form-error">{error}</div>}
 
+          {/* Sticky footer */}
           <div className="modal-foot">
             <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
             <button type="submit" className="btn btn-primary">Сохранить</button>
           </div>
         </form>
       </div>
+
+      {/* Стили модалки — такие же, как в AddCandidateModal */}
+      <style jsx global>{`
+        .modal-backdrop{
+          position:fixed; inset:0; z-index:1000;
+          background:rgba(2,8,23,.55); backdrop-filter:blur(6px);
+          display:flex; align-items:center; justify-content:center;
+          padding:24px;
+          animation:fadeIn .15s ease-out;
+        }
+        .modal-shell{
+          width:min(920px,96vw);
+          max-height:90vh;
+          background:var(--card);
+          border:1px solid var(--line);
+          border-radius:20px;
+          box-shadow:0 24px 80px rgba(2,8,23,.28);
+          overflow:hidden;
+          transform:scale(.98);
+          animation:popIn .15s ease-out forwards;
+        }
+        .modal-head{
+          display:flex; align-items:center; justify-content:space-between;
+          padding:14px 16px;
+          background:#f1f5f9; border-bottom:1px solid var(--line);
+        }
+        [data-theme="dark"] .modal-head{ background:#0b1424 }
+        .modal-title{ font-weight:700 }
+        .icon-close{
+          border:none; background:transparent; font-size:22px; line-height:1;
+          color:#94a3b8; cursor:pointer;
+        }
+        .modal-body{
+          padding:16px;
+          overflow:auto;
+          max-height:calc(90vh - 56px);
+        }
+        .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:12px }
+        @media (max-width:820px){ .grid-2{ grid-template-columns:1fr } }
+        .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
+        .field label{ font-size:13px; color:var(--muted) }
+        .req{ color:#ef4444; margin-left:4px }
+        .hint{ color:var(--muted); font-weight:400; }
+        .field input, .field textarea{
+          padding:10px 12px; border:1px solid var(--line); border-radius:12px;
+          background:transparent; color:var(--text); font-size:14px;
+        }
+        .field textarea{ resize:vertical }
+        .form-error{
+          color:#ef4444; background:#fef2f2; border:1px solid #fecaca;
+          padding:8px 10px; border-radius:10px; font-size:13px; margin-top:4px;
+        }
+        .modal-foot{
+          position:sticky; bottom:0; display:flex; gap:10px; justify-content:flex-end;
+          background:linear-gradient(to top, var(--card) 80%, rgba(0,0,0,0) );
+          padding-top:12px; margin-top:6px;
+        }
+        .btn{ border:none; cursor:pointer; border-radius:12px; padding:10px 14px; font-weight:700; font-size:14px }
+        .btn-primary{ background:var(--brand); color:#fff }
+        .btn-primary:hover{ background:#1e4ed8 }
+        .btn-outline{ background:transparent; border:1px solid var(--brand); color:var(--brand) }
+        .btn-outline:hover{ background:rgba(37,99,235,.08) }
+        @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
+        @keyframes popIn{ to{ transform:scale(1) } }
+      `}</style>
     </div>
   );
 }
+
 
 /* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» (обновлённый дизайн) ========= */
 function AddCandidateModal({ open, onClose, onAdd }) {
