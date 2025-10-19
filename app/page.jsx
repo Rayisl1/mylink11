@@ -560,14 +560,19 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     setFinalScore(null);
 
     if (candidate) {
-      // режим работодателя — автооценка без чата
-      const score = computeAutoScore(candidate, job);
-      setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
-      setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
-      setFinalScore(score);
-      saveApplication(score, candidate);
-      return;
-    }
+  const score = computeAutoScore(candidate, job);
+  const why = score >= 100 ? "" : autoWhy(candidate, job);
+
+  setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
+  setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
+  setFinalScore(score);
+  saveApplication(score, candidate, why);
+  if (why) {
+    setMessages((arr)=>[...arr, { role: "assistant", content: `Почему не 100%: ${why}` }]);
+  }
+  return;
+}
+
 
     // режим соискателя — обязательно отправляем INIT, чтобы на бэке всегда были contents
     askGemini([{ role: "user", content: "INIT" }]);
@@ -617,6 +622,41 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
     return Math.round(Math.max(0, Math.min(100, score)));
   }
+  function autoWhy(candidate, job) {
+  const gaps = [];
+
+  // город
+  if (candidate.city && job.city && candidate.city.toLowerCase() !== job.city.toLowerCase()) {
+    gaps.push(`Город отличается (${candidate.city} ≠ ${job.city})`);
+  }
+
+  // стаж
+  const candYears = parseYears(candidate.experience);
+  let need = 0;
+  if (job.exp) {
+    const m = String(job.exp).match(/(\d+)/);
+    if (m) need = Number(m[1]);
+    else if (/senior/i.test(job.exp)) need = 5;
+    else if (/middle\+?/i.test(job.exp)) need = 3;
+    else if (/middle/i.test(job.exp)) need = 2;
+    else if (/junior/i.test(job.exp)) need = 0.5;
+  }
+  if (need > 0 && candYears < need) {
+    gaps.push(`Опыт ниже требования (${candYears} < ${need} лет)`);
+  }
+
+  // ключевые слова
+  const jt = (job.title || "").toLowerCase();
+  const pf = (candidate.profession || "").toLowerCase();
+  if (jt && pf && !(pf.includes(jt) || jt.includes(pf))) {
+    gaps.push(`Профиль не совпадает с названием вакансии («${candidate.profession}» vs «${job.title}» )`);
+  }
+
+  return gaps.length
+    ? `Основные расхождения: ${gaps.join("; ")}.`
+    : "Незначительные несоответствия по профилю/ключевым словам.";
+}
+
 
   // Сохранение результата
   function saveApplication(score, candidateParam = null, why = null) {
@@ -856,17 +896,23 @@ function EmployerTable() {
   </tr>
 </thead>
     <tbody>
-      ${rows.map(r=>`
-        <tr>
-          <td>${esc(r.name)}</td>
-          <td>${esc(r.email||"-")}</td>
-          <td>${esc(r.jobTitle||"")}</td>
-          <td class="right">${Number(r.score)||0}%</td>
-          <td>${esc(r.city||"-")}</td>
-          <td>${esc(r.exp||"-")}</td>
-          <td>${new Date(r.date).toLocaleString()}</td>
-        </tr>`).join("")}
-    </tbody>
+  ${rows.map(r=>`
+    <tr>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.email||"-")}</td>
+      <td>${esc(r.jobTitle||"")}</td>
+      <td class="right">${Number(r.score)||0}%</td>
+      <td>${esc(r.city||"-")}</td>
+      <td>${esc(r.exp||"-")}</td>
+      <td>${esc(r.format||"-")}</td>
+      <td style="max-width:320px; white-space:normal;">
+        ${r.why ? esc(r.why) : (Number(r.score) >= 80 ? "— Причины не указаны" : "—")}
+      </td>
+      <td>${new Date(r.date).toLocaleString()}</td>
+    </tr>
+  `).join("")}
+</tbody>
+
   </table>
   <script>window.print();</script>
 </body>
