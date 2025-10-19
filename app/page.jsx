@@ -1625,7 +1625,7 @@ export default function Page() {
       {/* Header */}
       <div className="header">
         <div className="header-inner">
-          <div className="logo">JobBoard</div>
+          <div className="logo">MyLink</div>
 
           <div className="mode">
             <button className={clsx("seg", mode==="find_job" && "seg-active")} onClick={()=>setMode("find_job")}>Найти работу</button>
@@ -1667,7 +1667,7 @@ export default function Page() {
           <div>
             <h1>{mode==="find_job" ? "Найдите работу мечты" : "Найдите подходящего сотрудника"}</h1>
             <p>{mode==="find_job"
-              ? "Лаконичный интерфейс, быстрый отклик и умный скрининг через SmartBot."
+              ? "Удобный интерфейс, быстрый отклик и умный скрининг через SmartBot."
               : "Смотрите карточки соискателей, открывайте резюме и изучайте опыт. Работодатели могут добавлять новых соискателей."}
             </p>
           </div>
