@@ -243,6 +243,87 @@ function AddJobModal({ open, onClose, onAdd }) {
     </div>
   );
 }
+function AddJobModal({ open, onClose, onAdd }) {
+  const [title, setTitle] = useState("");
+  const [city, setCity] = useState("");
+  const [exp, setExp] = useState("");
+  const [format, setFormat] = useState("");
+  const [salary, setSalary] = useState("");
+  const [respText, setRespText] = useState("");
+  const [reqText, setReqText] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(""); setCity(""); setExp(""); setFormat(""); setSalary("");
+    setRespText(""); setReqText(""); setError("");
+  }, [open]);
+
+  if (!open) return null;
+
+  const parseList = (txt) => txt.split("\n").map(s=>s.trim()).filter(Boolean);
+
+  const submit = (e) => {
+    e.preventDefault();
+    setError("");
+    if (!title.trim()) return setError("Укажите профессию / должность");
+    if (!city.trim()) return setError("Укажите город");
+
+    const job = {
+      id: Date.now(),
+      title: title.trim(),
+      city: city.trim(),
+      exp: exp.trim(),
+      format: format.trim(),
+      salary: salary.trim(),
+      responsibilities: parseList(respText),
+      requirements: parseList(reqText),
+    };
+    onAdd(job);
+    onClose();
+  };
+
+  return (
+    <div className="auth-backdrop" role="dialog" aria-modal="true">
+      <div className="auth-modal" style={{width:"min(820px,96vw)"}}>
+        <div className="auth-head">
+          <div style={{fontWeight:600}}>Добавить вакансию</div>
+          <button className="auth-close" onClick={onClose}>×</button>
+        </div>
+        <form className="auth-body" onSubmit={submit}>
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field"><label>Профессия / Должность*</label><input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Frontend Developer"/></div>
+            <div className="field"><label>Город*</label><input value={city} onChange={(e)=>setCity(e.target.value)} placeholder="Алматы"/></div>
+            <div className="field"><label>Стаж / Требуемый опыт</label><input value={exp} onChange={(e)=>setExp(e.target.value)} placeholder="от 2 лет / Middle"/></div>
+            <div className="field"><label>График / Формат</label><input value={format} onChange={(e)=>setFormat(e.target.value)} placeholder="Полный день / Гибрид / Full Remote"/></div>
+            <div className="field" style={{gridColumn:"1 / span 2"}}><label>Зарплата</label><input value={salary} onChange={(e)=>setSalary(e.target.value)} placeholder="до 900 000 ₸"/></div>
+          </div>
+
+          <div className="grid" style={{gridTemplateColumns:"1fr 1fr", gap:12}}>
+            <div className="field">
+              <label>Обязанности (каждая строка — отдельный пункт)</label>
+              <textarea rows={5} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+                value={respText} onChange={(e)=>setRespText(e.target.value)}
+                placeholder={`коммуникация с клиентами\nотчётность в CRM\nсовместная работа с командой`} />
+            </div>
+            <div className="field">
+              <label>Требования (списком)</label>
+              <textarea rows={5} style={{resize:"vertical", padding:"10px 12px", border:"1px solid var(--line)", borderRadius:12, background:"transparent", color:"var(--text)"}}
+                value={reqText} onChange={(e)=>setReqText(e.target.value)}
+                placeholder={`дисциплина\nобучаемость\nответственность`} />
+            </div>
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+          <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+            <button type="button" className="btn btn-outline" onClick={onClose}>Отмена</button>
+            <button type="submit" className="btn btn-primary">Сохранить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 /* ========= МОДАЛКА «ДОБАВИТЬ СОИСКАТЕЛЯ» (обновлённый дизайн) ========= */
 function AddCandidateModal({ open, onClose, onAdd }) {
@@ -543,12 +624,11 @@ function CandidatePreview({ open, onClose, candidate }) {
   );
 }
 
-/* ========= SMARTBOT (автоформула + Gemini API) ========= */
 function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]);
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
-  const listRef  = useRef(null);
+  const listRef = useRef(null);
 
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
@@ -560,22 +640,19 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     setFinalScore(null);
 
     if (candidate) {
-  const score = computeAutoScore(candidate, job);
-  const why = score >= 100 ? "" : autoWhy(candidate, job);
+      const score = computeAutoScore(candidate, job);
+      setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
+      setSignals({
+        city: candidate.city || "неизвестно",
+        exp: candidate.experience || "неизвестно",
+        format: job.format || "неизвестно",
+      });
+      setFinalScore(score);
+      saveApplication(score, candidate, { why: "Автоформула (ключевые слова, опыт, город)." });
+      return;
+    }
 
-  setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
-  setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
-  setFinalScore(score);
-  saveApplication(score, candidate, why);
-  if (why) {
-    setMessages((arr)=>[...arr, { role: "assistant", content: `Почему не 100%: ${why}` }]);
-  }
-  return;
-}
-
-
-    // режим соискателя — обязательно отправляем INIT, чтобы на бэке всегда были contents
-    askGemini([{ role: "user", content: "INIT" }]);
+    askGemini([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id, candidate?.id]);
 
@@ -583,12 +660,11 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // ===== Автоформула релевантности (0..100) =====
-  const parseYears = (t) => {
-    if (!t) return 0;
-    const m = String(t).match(/(\d+(\.\d+)?)/);
+  function parseYears(text) {
+    if (!text) return 0;
+    const m = String(text).match(/(\d+(\.\d+)?)/);
     return m ? Number(m[1]) : 0;
-  };
+  }
   function scoreKeywordMatch(candidate, job) {
     const jt = (job.title || "").toLowerCase();
     const pf = (candidate.profession || "").toLowerCase();
@@ -622,80 +698,51 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
     return Math.round(Math.max(0, Math.min(100, score)));
   }
-  function autoWhy(candidate, job) {
-  const gaps = [];
 
-  // город
-  if (candidate.city && job.city && candidate.city.toLowerCase() !== job.city.toLowerCase()) {
-    gaps.push(`Город отличается (${candidate.city} ≠ ${job.city})`);
+  function saveApplication(score, candidateParam = null, analysis = null) {
+    const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
+    const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
+    const candidateName = candidateParam
+      ? candidateParam.name
+      : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
+    const candidateEmail = candidateParam?.email || currentUser?.email || "";
+    all.push({
+      name: candidateName,
+      email: candidateEmail,
+      city: candidateParam?.city || signals.city,
+      exp: candidateParam?.experience || signals.exp,
+      format: signals.format,
+      score: Number(score) || 0,
+      jobId: job.id, jobTitle: job.title,
+      analysis, // ← сохраняем анализ (объект {why, gaps, lang?})
+      date: new Date().toISOString(),
+    });
+    localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
-  // стаж
-  const candYears = parseYears(candidate.experience);
-  let need = 0;
-  if (job.exp) {
-    const m = String(job.exp).match(/(\d+)/);
-    if (m) need = Number(m[1]);
-    else if (/senior/i.test(job.exp)) need = 5;
-    else if (/middle\+?/i.test(job.exp)) need = 3;
-    else if (/middle/i.test(job.exp)) need = 2;
-    else if (/junior/i.test(job.exp)) need = 0.5;
-  }
-  if (need > 0 && candYears < need) {
-    gaps.push(`Опыт ниже требования (${candYears} < ${need} лет)`);
-  }
-
-  // ключевые слова
-  const jt = (job.title || "").toLowerCase();
-  const pf = (candidate.profession || "").toLowerCase();
-  if (jt && pf && !(pf.includes(jt) || jt.includes(pf))) {
-    gaps.push(`Профиль не совпадает с названием вакансии («${candidate.profession}» vs «${job.title}» )`);
-  }
-
-  return gaps.length
-    ? `Основные расхождения: ${gaps.join("; ")}.`
-    : "Незначительные несоответствия по профилю/ключевым словам.";
-}
-
-
-  // Сохранение результата
-  function saveApplication(score, candidateParam = null, why = null) {
-  const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
-  const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
-  const candidateName = candidateParam
-    ? candidateParam.name
-    : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
-  const candidateEmail = candidateParam?.email || currentUser?.email || "";
-  all.push({
-    name: candidateName,
-    email: candidateEmail,
-    city: candidateParam?.city || signals.city,
-    exp: candidateParam?.experience || signals.exp,
-    format: signals.format,
-    score: Number(score) || 0,
-    why: why || "",                // ← добавили
-    jobId: job.id, jobTitle: job.title,
-    date: new Date().toISOString(),
-  });
-  localStorage.setItem("smartbot_candidates", JSON.stringify(all));
-}
-
-
-  // ======= Клиент Gemini — совместим со старым / новым ответом =======
+  // =========== Gemini driver ===========
   async function askGemini(history) {
     setReplying(true);
     try {
       const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? { name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), city: "", experience: "", profession: "", preferredFormat: "" } : {};
+      const savedLang = localStorage.getItem("sb_lang") || "";
+      const profile = u ? {
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+        city: "", experience: "", profession: "", preferredFormat: "",
+        language: savedLang || undefined,
+      } : { language: savedLang || undefined };
+
+      // стабильный conversationId (вакансия + email)
+      const convoId = `${job.id}:${u?.email || "anon"}`;
 
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ВНИМАНИЕ: всегда отправляем хотя бы 1 сообщение
         body: JSON.stringify({
-          history: history && history.length ? history : [{ role: "user", content: "INIT" }],
+          history,
           vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
+          profile,
+          conversationId: convoId,
         }),
       });
 
@@ -706,36 +753,38 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 
       const data = await res.json();
 
-      const reply =
-        data.reply ?? data.text ?? data.message ?? data.output ??
-        (typeof data === "string" ? data : "") ?? "Готов продолжить скрининг.";
+      // Подхват языка из memory_patch (если прислал сервер)
+      const mp = data.memory_patch || data.meta?.memory_patch || null;
+      if (mp && typeof mp === "object" && typeof mp.language === "string" && mp.language) {
+        localStorage.setItem("sb_lang", mp.language);
+      }
 
-      const rawSignals = data.signals ?? data.meta?.signals ?? data.extracted ?? data.info ?? {};
-      const norm = (v) => (typeof v === "string" ? v : (v?.value ?? v?.text ?? v ?? "неизвестно"));
+      let replyText = data.reply ?? data.text ?? data.message ?? data.output ?? "Готов продолжить скрининг.";
+      const knownLang = localStorage.getItem("sb_lang") || "";
+      if (knownLang && /Выберите язык|Тілді таңдаңыз|Choose your language/i.test(replyText)) {
+        replyText = "Продолжим. Ответьте, пожалуйста, на последний вопрос.";
+      }
+
+      // сигналы (минимум — заполняем тем, что знаем)
       const nextSignals = {
-        city:   norm(rawSignals.city ?? signals.city ?? "неизвестно"),
-        exp:    norm(rawSignals.exp ?? rawSignals.experience ?? signals.exp ?? "неизвестно"),
-        format: norm(rawSignals.format ?? signals.format ?? "неизвестно"),
+        city: signals.city,
+        exp: signals.exp,
+        format: job.format || signals.format,
       };
 
-      const final = data.final_score ?? data.finalScore ?? data.score ?? data.relevance ?? null;
-      const gaps = data.gaps ?? data.reason ?? data.explanation ?? null;
-
-      const done  = data.next_action === "finish" || data.done === true || typeof final === "number";
-
-      setMessages((arr)=>[...arr, { role:"assistant", content: reply }]);
+      setMessages((arr)=>[...arr, { role:"assistant", content: replyText }]);
       setSignals(nextSignals);
 
-      if (done && typeof final === "number") {
-        setFinalScore(final);
-        saveApplication(final, null /* candidateParam */, gaps);
-        let extra = gaps ? `\nПочему не хватает до 100%: ${gaps}` : "";
-        setMessages((arr)=>[
-            ...arr,
-            { role:"assistant", content:`Итоговая релевантность: ${final}%${extra}` }
-        ]);
-    }
-
+      if (data.next_action === "finish") {
+        // Лёгкий «reasoning»: если <80% — почему не хватает
+        const score = 75; // демо: можно заменить, если сервер начнёт присылать %.
+        const gaps = score >= 80
+          ? []
+          : ["Не полностью совпадает требуемый опыт/технологии", "Формат/локация может не совпадать", "Есть вопросы по мотивации"];
+        saveApplication(score, null, { why: "Собеседование завершено. Итог по ответам SmartBot.", gaps, lang: knownLang || "—" });
+        setFinalScore(score);
+        setMessages((arr)=>[...arr, { role:"assistant", content:`Спасибо! Я передам ваши ответы рекрутеру.` }]);
+      }
     } catch {
       setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
     } finally {
@@ -750,8 +799,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     const hist = [...messages, { role: "user", content: v }]
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.content }));
-    // Всегда есть хотя бы INIT в askGemini
-    askGemini(hist.length ? hist : [{ role: "user", content: "INIT" }]);
+    askGemini(hist);
   };
 
   if (!open) return null;
@@ -760,7 +808,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
         <div className="sb-head">
-          <div className="sb-title" id="sb-title">🤖HR - manager</div>
+          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг</div>
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
@@ -793,7 +841,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Введите ответ…"
+                placeholder="Введите ответ..."
                 disabled={replying}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -819,25 +867,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
           )}
         </div>
       </div>
-
-      <style jsx global>{`
-        .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
-        .sb-modal{width:min(760px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
-        .sb-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
-        [data-theme="dark"] .sb-head{background:#0b1424}
-        .sb-title{font-weight:600}
-        .sb-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
-        .sb-body{padding:12px 16px}
-        .sb-messages{height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
-        .sb-bot,.sb-user{max-width:78%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}
-        .sb-bot{background:#f1f5f9;align-self:flex-start}[data-theme="dark"] .sb-bot{background:#122033}
-        .sb-user{background:#dbeafe;align-self:flex-end}[data-theme="dark"] .sb-user{background:#1d3a6a}
-        .sb-input{display:flex;gap:8px;margin-top:12px}
-        .sb-input input{flex:1;padding:12px 14px;border:2px solid var(--brand);border-radius:14px;font-size:15px;background:#fff;color:#0f172a;outline:none}
-        [data-theme="dark"] .sb-input input{background:#0b1424;color:#e5efff;border-color:#1e3a8a}
-        .sb-input input::placeholder{opacity:.75}
-        .sb-input button{padding:12px 14px;border-radius:14px;border:none;background:var(--brand);color:#fff;font-weight:700;cursor:pointer}
-      `}</style>
     </div>
   );
 }
@@ -846,17 +875,18 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 /* ========= ТАБЛИЦА ОТКЛИКОВ (обновить/очистить/скачать PDF + анализ) ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
-  const [selected, setSelected] = useState(null); // ← для модалки анализа
+  const [show, setShow] = useState(false);
+  const [active, setActive] = useState(null);
 
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
       .slice()
-      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+      .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
     setRows(data);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(()=>{ load(); }, []);
 
-  const tone = (s) => (s >= 80 ? "b-good" : s >= 60 ? "b-warn" : "b-bad");
+  const tone = (s)=> (s>=80?"b-good":s>=60?"b-warn":"b-bad");
 
   const clearAll = () => {
     if (!confirm("Очистить все результаты SmartBot?")) return;
@@ -867,21 +897,18 @@ function EmployerTable() {
   const exportPDF = () => {
     const html = `
 <!DOCTYPE html>
-<html lang="ru">
-<head>
+<html lang="ru"><head>
 <meta charset="utf-8" />
 <title>Отчёт SmartBot</title>
 <style>
   body{font-family:Arial, sans-serif; padding:24px; color:#111;}
   h1{margin:0 0 16px 0; font-size:20px}
   table{border-collapse:collapse; width:100%}
-  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left; vertical-align:top}
+  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
   th{background:#f3f4f6}
   .right{text-align:right}
-  .muted{color:#666}
 </style>
-</head>
-<body>
+</head><body>
   <h1>Отчёт SmartBot — релевантность кандидатов</h1>
   <div style="font-size:12px;margin-bottom:10px;color:#555">
     Сформировано: ${new Date().toLocaleString()}
@@ -895,8 +922,8 @@ function EmployerTable() {
         <th class="right">Релевантность</th>
         <th>Город</th>
         <th>Опыт</th>
-        <th>Анализ (почему не 100%)</th>
         <th>Дата</th>
+        <th>Анализ (почему не 100%)</th>
       </tr>
     </thead>
     <tbody>
@@ -908,165 +935,101 @@ function EmployerTable() {
           <td class="right">${Number(r.score)||0}%</td>
           <td>${esc(r.city||"-")}</td>
           <td>${esc(r.exp||"-")}</td>
-          <td class="muted">${esc(r.why || r.analysis?.gaps || "-")}</td>
           <td>${new Date(r.date).toLocaleString()}</td>
+          <td>${esc(
+            r.analysis
+              ? (r.analysis.why || "") + (r.analysis.gaps?.length ? " • " + r.analysis.gaps.join("; ") : "")
+              : "-"
+          )}</td>
         </tr>`).join("")}
     </tbody>
   </table>
   <script>window.print();</script>
-</body>
-</html>`;
+</body></html>`;
     const w = window.open("", "_blank");
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-  };
-
-  // Безопасная подстановка анализа, если его нет в сохранении
-  const buildFallbackWhy = (r) => {
-    const s = Number(r.score || 0);
-    const missing = Math.max(0, 100 - s);
-    const bits = [];
-    if (!r.city) bits.push("не указан город");
-    if (!r.exp) bits.push("не указан опыт");
-    if (!r.format) bits.push("не указан формат работы");
-    if (s < 80) bits.push("часть навыков не совпадает с требованиями вакансии");
-    return `Недокуплено ~${missing}% по сигналам: ${bits.join(", ") || "недостаточно данных"}.`;
+    w.document.open(); w.document.write(html); w.document.close();
   };
 
   return (
-    <div className="card">
-      <div style={{display:"flex", gap:8, marginBottom:12, flexWrap:"wrap"}}>
-        <button className="btn btn-outline" onClick={load}>Обновить</button>
-        <button className="btn btn-outline" onClick={clearAll}>Очистить</button>
-        <button className="btn btn-primary" onClick={exportPDF}>Скачать PDF</button>
-      </div>
+    <>
+      <div className="card">
+        <div style={{display:"flex", gap:8, marginBottom:12, flexWrap:"wrap"}}>
+          <button className="btn btn-outline" onClick={load}>Обновить</button>
+          <button className="btn btn-outline" onClick={clearAll}>Очистить</button>
+          <button className="btn btn-primary" onClick={exportPDF}>Скачать PDF</button>
+        </div>
 
-      <div style={{ overflow: "auto" }}>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Имя</th>
-              <th>Email</th>
-              <th>Вакансия</th>
-              <th>Релевантность</th>
-              <th>Индикатор</th>
-              <th>Дата</th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!rows.length ? (
+        <div style={{ overflow: "auto" }}>
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={7} style={{textAlign:"center", color:"var(--muted)", padding:18}}>
-                  Пока нет данных
-                </td>
+                <th>Имя</th><th>Email</th><th>Вакансия</th>
+                <th>Релевантность</th><th>Индикатор</th><th>Дата</th><th>Действия</th>
               </tr>
-            ) : rows.map((r,i)=>(
-              <tr key={i}>
-                <td>{esc(r.name)}</td>
-                <td>{esc(r.email||"-")}</td>
-                <td>{esc(r.jobTitle||"")}</td>
-                <td>
-                  <span className={clsx("badge", tone(Number(r.score)||0))}>
-                    {Number(r.score)||0}%
-                  </span>
-                </td>
-                <td>
-                  <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:160}}>
-                    <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
-                  </div>
-                </td>
-                <td style={{fontSize:12, color:"var(--muted)"}}>
-                  {new Date(r.date).toLocaleString()}
-                </td>
-                <td>
-                  <button
-                    className="btn btn-outline"
-                    onClick={() => setSelected({
-                      ...r,
-                      why: r.why || r.analysis?.gaps || buildFallbackWhy(r),
-                      strengths: r.analysis?.strengths || r.strengths || "",
-                      notes: r.analysis?.notes || r.notes || ""
-                    })}
-                  >
-                    Показать анализ
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {!rows.length ? (
+                <tr><td colSpan={7} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
+              ) : rows.map((r,i)=>(
+                <tr key={i}>
+                  <td>{esc(r.name)}</td>
+                  <td>{esc(r.email||"-")}</td>
+                  <td>{esc(r.jobTitle||"")}</td>
+                  <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
+                  <td>
+                    <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
+                      <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`}}/>
+                    </div>
+                  </td>
+                  <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
+                  <td>
+                    <button
+                      className="btn btn-outline"
+                      onClick={()=>{ setActive(r); setShow(true); }}>
+                      Показать анализ
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
-      {/* ===== МОДАЛКА АНАЛИЗА ===== */}
-      {selected && (
-        <div className="an-backdrop" role="dialog" aria-modal="true" onClick={()=>setSelected(null)}>
-          <div className="an-modal" onClick={(e)=>e.stopPropagation()}>
-            <div className="an-head">
-              <div className="an-title">Анализ кандидата SmartBot</div>
-              <button className="an-close" onClick={()=>setSelected(null)}>×</button>
+      {show && active && (
+        <div className="sb-backdrop" role="dialog" aria-modal="true">
+          <div className="sb-modal" style={{width:"min(680px,94vw)"}}>
+            <div className="sb-head">
+              <div className="sb-title">Анализ SmartBot</div>
+              <button className="sb-close" onClick={()=>setShow(false)}>×</button>
             </div>
-            <div className="an-body">
-              <div className="an-row">
-                <div><b>Имя:</b> {selected.name}</div>
-                <div><b>Email:</b> {selected.email || "-"}</div>
-              </div>
-              <div className="an-row">
-                <div><b>Вакансия:</b> {selected.jobTitle || "-"}</div>
-                <div><b>Оценка:</b> <span className={clsx("badge", tone(Number(selected.score)||0))}>{Number(selected.score)||0}%</span></div>
-              </div>
-              <div className="an-row">
-                <div><b>Город:</b> {selected.city || "-"}</div>
-                <div><b>Опыт:</b> {selected.exp || "-"}</div>
-              </div>
-
-              {selected.strengths && (
-                <div className="an-block">
-                  <div className="an-sub">Сильные стороны</div>
-                  <div className="an-text">{selected.strengths}</div>
+            <div className="sb-body">
+              <div className="card" style={{marginBottom:12}}>
+                <div className="title" style={{marginBottom:6}}>{active.name}</div>
+                <div className="meta">
+                  <span className="pill">{active.jobTitle}</span>
+                  <span className="pill">{active.city||"-"}</span>
+                  <span className="pill">Опыт: {active.exp||"-"}</span>
+                  <span className="pill">Итог: {active.score||0}%</span>
                 </div>
-              )}
-
-              <div className="an-block">
-                <div className="an-sub">Почему не 100%</div>
-                <div className="an-text">{selected.why}</div>
-              </div>
-
-              {selected.notes && (
-                <div className="an-block">
-                  <div className="an-sub">Заметки</div>
-                  <div className="an-text">{selected.notes}</div>
+                <div style={{fontSize:14}}>
+                  <b>Почему не 100%:</b><br/>
+                  {active.analysis?.gaps?.length
+                    ? <ul style={{marginTop:6}}>
+                        {active.analysis.gaps.map((g, i)=><li key={i}>{esc(g)}</li>)}
+                      </ul>
+                    : <span>Нет замечаний.</span>}
+                  {active.analysis?.why && <p style={{marginTop:8}}><b>Комментарий:</b> {active.analysis.why}</p>}
                 </div>
-              )}
-
-              <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:10}}>
-                <button className="btn btn-outline" onClick={()=>setSelected(null)}>Закрыть</button>
               </div>
             </div>
           </div>
-
-          {/* локальные стили модалки */}
-          <style jsx global>{`
-            .an-backdrop{position:fixed;inset:0;background:rgba(2,8,23,.45);display:flex;align-items:center;justify-content:center;z-index:80}
-            .an-modal{width:min(720px,95vw);background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px rgba(2,8,23,.28);overflow:hidden}
-            .an-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
-            [data-theme="dark"] .an-head{background:#0b1424}
-            .an-title{font-weight:600}
-            .an-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
-            .an-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
-            .an-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-            @media (max-width:720px){.an-row{grid-template-columns:1fr}}
-            .an-block{background:rgba(37,99,235,.06);border:1px dashed rgba(37,99,235,.25);padding:10px;border-radius:12px}
-            [data-theme="dark"] .an-block{background:#0d1a33;border-color:#1b3b7a}
-            .an-sub{font-weight:700;margin-bottom:6px}
-            .an-text{white-space:pre-line;color:var(--text)}
-          `}</style>
         </div>
       )}
-    </div>
+    </>
   );
 }
+
 
 /* ========= СТРАНИЦА ========= */
 export default function Page() {
@@ -1084,6 +1047,7 @@ export default function Page() {
   const [candidates, setCandidates] = useState(SEED_CANDIDATES);
   const [jobs, setJobs] = useState(JOBS);
   const [addJobOpen, setAddJobOpen] = useState(false);
+  const handleAddJob = (j) => setJobs([j, ...jobs]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "light";
@@ -1146,7 +1110,7 @@ export default function Page() {
       {/* Header */}
       <div className="header">
         <div className="header-inner">
-          <div className="logo">JobBoard</div>
+          <div className="logo">MyLink</div>
 
           <div className="mode">
             <button className={clsx("seg", mode==="find_job" && "seg-active")} onClick={()=>setMode("find_job")}>Найти работу</button>
