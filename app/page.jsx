@@ -548,28 +548,38 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]);
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
-  const listRef  = useRef(null);
+  const listRef = useRef(null);
 
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
+  const [analysis, setAnalysis] = useState(""); // Детальный анализ соответствия
 
   useEffect(() => {
     if (!open) return;
     setMessages([]);
     setSignals({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
     setFinalScore(null);
+    setAnalysis("");
 
     if (candidate) {
       // режим работодателя — автооценка без чата
-      const score = computeAutoScore(candidate, job);
-      setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
-      setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
+      const { score, analysis: autoAnalysis } = computeAutoScoreWithAnalysis(candidate, job);
+      setMessages([{ 
+        role: "assistant", 
+        content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%\n\n${autoAnalysis}` 
+      }]);
+      setSignals({ 
+        city: candidate.city || "неизвестно", 
+        exp: candidate.experience || "неизвестно", 
+        format: job.format || "неизвестно" 
+      });
       setFinalScore(score);
-      saveApplication(score, candidate);
+      setAnalysis(autoAnalysis);
+      saveApplication(score, candidate, autoAnalysis);
       return;
     }
 
-    // режим соискателя — обязательно отправляем INIT, чтобы на бэке всегда были contents
+    // режим соискателя — обязательно отправляем INIT
     askGemini([{ role: "user", content: "INIT" }]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id, candidate?.id]);
@@ -578,30 +588,67 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // ===== Автоформула релевантности (0..100) =====
+  // ===== УЛУЧШЕННАЯ АВТОФОРМУЛА С АНАЛИЗОМ =====
   const parseYears = (t) => {
     if (!t) return 0;
     const m = String(t).match(/(\d+(\.\d+)?)/);
     return m ? Number(m[1]) : 0;
   };
+
   function scoreKeywordMatch(candidate, job) {
     const jt = (job.title || "").toLowerCase();
     const pf = (candidate.profession || "").toLowerCase();
-    if (!jt || !pf) return 0;
-    let s = 0;
-    if (pf.includes(jt) || jt.includes(pf)) s += 40;
+    if (!jt || !pf) return { score: 0, matches: [] };
+    
+    let score = 0;
+    const matches = [];
+    
+    if (pf.includes(jt) || jt.includes(pf)) {
+      score += 40;
+      matches.push("полное совпадение профессии");
+    }
+    
     const keywords = jt.split(/\W+/).filter(Boolean);
-    let matches = 0;
-    for (const k of keywords) if (pf.includes(k)) matches++;
-    s += Math.min(30, matches * 6);
-    return s;
+    const foundKeywords = [];
+    for (const k of keywords) {
+      if (pf.includes(k)) {
+        foundKeywords.push(k);
+      }
+    }
+    
+    score += Math.min(30, foundKeywords.length * 6);
+    if (foundKeywords.length > 0) {
+      matches.push(`ключевые слова: ${foundKeywords.join(", ")}`);
+    }
+    
+    return { score, matches };
   }
-  function computeAutoScore(candidate, job) {
+
+  function computeAutoScoreWithAnalysis(candidate, job) {
     let score = 50;
-    if (candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase()) score += 15;
-    score += scoreKeywordMatch(candidate, job);
+    const positiveFactors = [];
+    const negativeFactors = [];
+
+    // Анализ города
+    if (candidate.city && job.city) {
+      if (candidate.city.toLowerCase() === job.city.toLowerCase()) {
+        score += 15;
+        positiveFactors.push("совпадение города");
+      } else {
+        score -= 10;
+        negativeFactors.push(`разные города: кандидат в ${candidate.city}, вакансия в ${job.city}`);
+      }
+    }
+
+    // Анализ ключевых слов
+    const keywordResult = scoreKeywordMatch(candidate, job);
+    score += keywordResult.score;
+    positiveFactors.push(...keywordResult.matches);
+
+    // Анализ опыта
     const candYears = parseYears(candidate.experience);
     let requiredYears = 0;
+    
     if (job.exp) {
       const m = String(job.exp).match(/(\d+)/);
       if (m) requiredYears = Number(m[1]);
@@ -610,30 +657,83 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       else if (/middle/i.test(job.exp)) requiredYears = 2;
       else if (/junior/i.test(job.exp)) requiredYears = 0.5;
     }
+
     if (requiredYears > 0) {
-      if (candYears >= requiredYears) score += 15;
-      else score -= Math.min(20, (requiredYears - candYears) * 6);
+      if (candYears >= requiredYears) {
+        score += 15;
+        positiveFactors.push(`достаточный опыт: ${candYears} лет при требуемых ${requiredYears}`);
+      } else {
+        const gap = requiredYears - candYears;
+        score -= Math.min(20, gap * 6);
+        negativeFactors.push(`недостаточный опыт: ${candYears} лет при требуемых ${requiredYears}`);
+      }
     }
-    if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
-    return Math.round(Math.max(0, Math.min(100, score)));
+
+    // Анализ формата работы
+    if (candidate.desiredFormat && job.format) {
+      if (candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) {
+        score += 5;
+        positiveFactors.push("совпадение формата работы");
+      } else {
+        negativeFactors.push(`разный формат работы: кандидат предпочитает ${candidate.desiredFormat}, вакансия: ${job.format}`);
+      }
+    }
+
+    // Формирование детального анализа
+    let analysis = `Детальный анализ соответствия кандидата "${candidate.name}" вакансии "${job.title}":\n\n`;
+    
+    if (positiveFactors.length > 0) {
+      analysis += "✅ СИЛЬНЫЕ СТОРОНЫ:\n";
+      positiveFactors.forEach(factor => {
+        analysis += `• ${factor}\n`;
+      });
+      analysis += "\n";
+    }
+
+    if (negativeFactors.length > 0) {
+      analysis += "❌ ЗОНЫ РОСТА:\n";
+      negativeFactors.forEach(factor => {
+        analysis += `• ${factor}\n`;
+      });
+      analysis += "\n";
+    }
+
+    analysis += `📊 ИТОГОВАЯ ОЦЕНКА: ${Math.round(Math.max(0, Math.min(100, score)))}%\n\n`;
+
+    if (score >= 80) {
+      analysis += "🎯 ВЫСОКАЯ РЕКОМЕНДАЦИЯ: Кандидат отлично подходит для вакансии!";
+    } else if (score >= 60) {
+      analysis += "⚠️ УСЛОВНАЯ РЕКОМЕНДАЦИЯ: Кандидат подходит, но есть моменты для обсуждения.";
+    } else {
+      analysis += "🚫 НИЗКАЯ РЕКОМЕНДАЦИЯ: Кандидат не соответствует основным требованиям.";
+    }
+
+    return {
+      score: Math.round(Math.max(0, Math.min(100, score))),
+      analysis
+    };
   }
 
-  // Сохранение результата
-  function saveApplication(score, candidateParam = null) {
+  // Сохранение результата с анализом
+  function saveApplication(score, candidateParam = null, analysisText = "") {
     const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
     const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
     const candidateName = candidateParam ? candidateParam.name : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
     const candidateEmail = candidateParam?.email || currentUser?.email || "";
+    
     all.push({
       name: candidateName,
       email: candidateEmail,
       city: candidateParam?.city || signals.city,
-      exp:  candidateParam?.experience || signals.exp,
+      exp: candidateParam?.experience || signals.exp,
       format: signals.format,
       score: Number(score) || 0,
-      jobId: job.id, jobTitle: job.title,
+      analysis: analysisText,
+      jobId: job.id, 
+      jobTitle: job.title,
       date: new Date().toISOString(),
     });
+    
     localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
@@ -642,15 +742,28 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     setReplying(true);
     try {
       const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? { name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), city: "", experience: "", profession: "", preferredFormat: "" } : {};
+      const profile = u ? { 
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), 
+        city: "", 
+        experience: "", 
+        profession: "", 
+        preferredFormat: "" 
+      } : {};
 
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ВНИМАНИЕ: всегда отправляем хотя бы 1 сообщение
         body: JSON.stringify({
           history: history && history.length ? history : [{ role: "user", content: "INIT" }],
-          vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
+          vacancy: { 
+            id: job.id, 
+            title: job.title, 
+            city: job.city, 
+            exp: job.exp, 
+            format: job.format,
+            duties: job.duties,
+            requirements: job.requirements
+          },
           profile
         }),
       });
@@ -681,9 +794,26 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
       setSignals(nextSignals);
 
       if (done && typeof final === "number") {
-        setFinalScore(final);
-        saveApplication(final);
-        setMessages((arr)=>[...arr, { role:"assistant", content:`Итоговая релевантность: ${final}%` }]);
+        // Генерируем автоматический анализ при завершении диалога
+        const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
+        const mockCandidate = {
+          name: currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат",
+          city: nextSignals.city,
+          experience: nextSignals.exp,
+          profession: currentUser?.profession || "",
+          desiredFormat: nextSignals.format
+        };
+        
+        const { score, analysis: autoAnalysis } = computeAutoScoreWithAnalysis(mockCandidate, job);
+        
+        setFinalScore(score);
+        setAnalysis(autoAnalysis);
+        saveApplication(score, null, autoAnalysis);
+        
+        setMessages((arr)=>[
+          ...arr, 
+          { role:"assistant", content: `Диалог завершён. Автоматическая оценка: ${score}%\n\n${autoAnalysis}` }
+        ]);
       }
     } catch {
       setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
@@ -699,7 +829,6 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     const hist = [...messages, { role: "user", content: v }]
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.content }));
-    // Всегда есть хотя бы INIT в askGemini
     askGemini(hist.length ? hist : [{ role: "user", content: "INIT" }]);
   };
 
@@ -794,6 +923,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 /* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
+  const [selectedRow, setSelectedRow] = useState(null);
 
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
@@ -825,6 +955,10 @@ function EmployerTable() {
   th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
   th{background:#f3f4f6}
   .right{text-align:right}
+  .analysis{background:#f8fafc; padding:12px; border-radius:8px; margin:8px 0; font-size:11px; white-space:pre-wrap}
+  .good{color:#065f46; background:#ecfdf5}
+  .warn{color:#92400e; background:#fffbeb}
+  .bad{color:#991b1b; background:#fef2f2}
 </style>
 </head>
 <body>
@@ -850,11 +984,18 @@ function EmployerTable() {
           <td>${esc(r.name)}</td>
           <td>${esc(r.email||"-")}</td>
           <td>${esc(r.jobTitle||"")}</td>
-          <td class="right">${Number(r.score)||0}%</td>
+          <td class="right ${r.score>=80?'good':r.score>=60?'warn':'bad'}">${Number(r.score)||0}%</td>
           <td>${esc(r.city||"-")}</td>
           <td>${esc(r.exp||"-")}</td>
           <td>${new Date(r.date).toLocaleString()}</td>
-        </tr>`).join("")}
+        </tr>
+        ${r.analysis ? `
+        <tr>
+          <td colspan="7">
+            <div class="analysis"><strong>Анализ соответствия:</strong><br>${esc(r.analysis)}</div>
+          </td>
+        </tr>` : ''}
+        `).join("")}
     </tbody>
   </table>
   <script>window.print();</script>
@@ -876,23 +1017,66 @@ function EmployerTable() {
 
       <div style={{ overflow: "auto" }}>
         <table className="table">
-          <thead><tr><th>Имя</th><th>Email</th><th>Вакансия</th><th>Релевантность</th><th>Индикатор</th><th>Дата</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Имя</th>
+              <th>Email</th>
+              <th>Вакансия</th>
+              <th>Релевантность</th>
+              <th>Индикатор</th>
+              <th>Дата</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
           <tbody>
             {!rows.length ? (
-              <tr><td colSpan={6} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
+              <tr><td colSpan={7} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
             ) : rows.map((r,i)=>(
-              <tr key={i}>
-                <td>{esc(r.name)}</td>
-                <td>{esc(r.email||"-")}</td>
-                <td>{esc(r.jobTitle||"")}</td>
-                <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
-                <td>
-                  <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
-                    <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
-                  </div>
-                </td>
-                <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
-              </tr>
+              <>
+                <tr key={i}>
+                  <td>{esc(r.name)}</td>
+                  <td>{esc(r.email||"-")}</td>
+                  <td>{esc(r.jobTitle||"")}</td>
+                  <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
+                  <td>
+                    <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
+                      <div style={{
+                        height:8, 
+                        width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, 
+                        background: Number(r.score) >= 80 ? "#10b981" : Number(r.score) >= 60 ? "#f59e0b" : "#ef4444"
+                      }}/>
+                    </div>
+                  </td>
+                  <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
+                  <td>
+                    <button 
+                      className="btn btn-outline" 
+                      style={{padding: "4px 8px", fontSize: "12px"}}
+                      onClick={() => setSelectedRow(selectedRow === i ? null : i)}
+                    >
+                      {selectedRow === i ? "Скрыть анализ" : "Показать анализ"}
+                    </button>
+                  </td>
+                </tr>
+                {selectedRow === i && r.analysis && (
+                  <tr>
+                    <td colSpan={7} style={{background: "var(--table-stripe)", padding: "16px"}}>
+                      <div style={{
+                        background: "var(--card)", 
+                        padding: "16px", 
+                        borderRadius: "8px", 
+                        border: "1px solid var(--line)",
+                        whiteSpace: "pre-wrap",
+                        fontSize: "14px",
+                        lineHeight: "1.4"
+                      }}>
+                        <strong>📊 Детальный анализ соответствия:</strong><br/><br/>
+                        {r.analysis}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             ))}
           </tbody>
         </table>
