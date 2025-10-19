@@ -547,17 +547,112 @@ function AddCandidateModal({ open, onClose, onAdd }) {
 }
 
 
-/* ========= МОДАЛКА ПРЕДПРОСМОТРА ========= */
-function CandidatePreview({ open, onClose, candidate }) {
+/* ========= МОДАЛКА ПРЕДПРОСМОТРА (с панелью «Оценка анализа») ========= */
+function CandidatePreview({ open, onClose, candidate, jobs = [], defaultJob = null }) {
+  const [job, setJob] = useState(defaultJob || jobs[0] || null);
+
+  // --- helpers (минимальная копия формул) ---
+  const parseYears = (t) => {
+    if (!t) return 0;
+    const m = String(t).match(/(\d+(\.\d+)?)/);
+    return m ? Number(m[1]) : 0;
+  };
+  function scoreKeywordMatch(candidate, job) {
+    const jt = (job?.title || "").toLowerCase();
+    const pf = (candidate?.profession || "").toLowerCase();
+    if (!jt || !pf) return 0;
+    let s = 0;
+    if (pf.includes(jt) || jt.includes(pf)) s += 40;
+    const keywords = jt.split(/\W+/).filter(Boolean);
+    let matches = 0;
+    for (const k of keywords) if (pf.includes(k)) matches++;
+    s += Math.min(30, matches * 6);
+    return s;
+  }
+  function computeAutoScore(candidate, job) {
+    if (!candidate || !job) return 0;
+    let score = 50;
+    if (candidate.city && job.city && candidate.city.toLowerCase() === job.city.toLowerCase()) score += 15;
+    score += scoreKeywordMatch(candidate, job);
+    const candYears = parseYears(candidate.experience);
+    let requiredYears = 0;
+    if (job.exp) {
+      const m = String(job.exp).match(/(\d+)/);
+      if (m) requiredYears = Number(m[1]);
+      else if (/senior/i.test(job.exp)) requiredYears = 5;
+      else if (/middle\+?/i.test(job.exp)) requiredYears = 3;
+      else if (/middle/i.test(job.exp)) requiredYears = 2;
+      else if (/junior/i.test(job.exp)) requiredYears = 0.5;
+    }
+    if (requiredYears > 0) {
+      if (candYears >= requiredYears) score += 15;
+      else score -= Math.min(20, (requiredYears - candYears) * 6);
+    }
+    if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
+    return Math.round(Math.max(0, Math.min(100, score)));
+  }
+  function autoWhy(candidate, job) {
+    if (!candidate || !job) return "Недостаточно данных.";
+    const gaps = [];
+    if (candidate.city && job.city && candidate.city.toLowerCase() !== job.city.toLowerCase()) {
+      gaps.push(`Город отличается (${candidate.city} ≠ ${job.city})`);
+    }
+    const candYears = parseYears(candidate.experience);
+    let need = 0;
+    if (job.exp) {
+      const m = String(job.exp).match(/(\d+)/);
+      if (m) need = Number(m[1]);
+      else if (/senior/i.test(job.exp)) need = 5;
+      else if (/middle\+?/i.test(job.exp)) need = 3;
+      else if (/middle/i.test(job.exp)) need = 2;
+      else if (/junior/i.test(job.exp)) need = 0.5;
+    }
+    if (need > 0 && candYears < need) {
+      gaps.push(`Опыт ниже требования (${candYears} < ${need} лет)`);
+    }
+    const jt = (job.title || "").toLowerCase();
+    const pf = (candidate.profession || "").toLowerCase();
+    if (jt && pf && !(pf.includes(jt) || jt.includes(pf))) {
+      gaps.push(`Профиль не совпадает с названием вакансии («${candidate.profession}» vs «${job.title}» )`);
+    }
+    return gaps.length ? gaps.join("; ") + "." : "Незначительные несоответствия по профилю/ключевым словам.";
+  }
+
+  const score = job ? computeAutoScore(candidate, job) : 0;
+  const whyText = job ? autoWhy(candidate, job) : "Выберите вакансию для анализа.";
+
+  // сохранить как запись (по желанию)
+  const saveSnapshot = () => {
+    if (!job) return;
+    const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
+    all.push({
+      name: candidate?.name || "Кандидат",
+      email: candidate?.email || "",
+      city: candidate?.city || "",
+      exp: candidate?.experience || "",
+      format: job?.format || "",
+      score,
+      why: `Почему не 100%: ${whyText}`,
+      jobId: job?.id,
+      jobTitle: job?.title,
+      date: new Date().toISOString(),
+    });
+    localStorage.setItem("smartbot_candidates", JSON.stringify(all));
+    alert("Снимок оценки сохранён в отчёты SmartBot.");
+  };
+
   if (!open || !candidate) return null;
+
   return (
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="cand-title">
-      <div className="sb-modal" style={{width:"min(760px,94vw)"}}>
+      <div className="sb-modal" style={{width:"min(920px,96vw)"}}>
         <div className="sb-head">
           <div className="sb-title" id="cand-title">👤 Предпросмотр соискателя</div>
           <button className="sb-close" onClick={onClose}>×</button>
         </div>
+
         <div className="sb-body">
+          {/* верхняя карточка */}
           <div className="card" style={{marginBottom:12}}>
             <h3 className="title" style={{marginBottom:6}}>{candidate.name}</h3>
             <div className="meta" style={{marginBottom:6}}>
@@ -578,7 +673,9 @@ function CandidatePreview({ open, onClose, candidate }) {
             </div>
           </div>
 
-          <div className="grid">
+          {/* ДВЕ КОЛОНКИ: слева факты, справа — Оценка анализа */}
+          <div className="grid" style={{gap:12}}>
+            {/* левая колонка */}
             <div className="card col-6">
               <h4 className="title" style={{marginBottom:8}}>Сведения о работе</h4>
               <ul style={{margin:0, paddingLeft:18}}>
@@ -591,6 +688,54 @@ function CandidatePreview({ open, onClose, candidate }) {
                 ))}
               </ul>
             </div>
+
+            {/* правая колонка: Оценка анализа */}
+            <div className="card col-6">
+              <div className="title" style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                <span>Оценка анализа</span>
+                <select
+                  value={job?.id || ""}
+                  onChange={(e)=>setJob(jobs.find(j=>String(j.id)===e.target.value) || null)}
+                  style={{padding:"6px 10px", border:"1px solid var(--line)", borderRadius:10, background:"transparent", color:"var(--text)"}}
+                >
+                  {jobs.map(j=><option key={j.id} value={j.id}>{j.title}</option>)}
+                </select>
+              </div>
+
+              {!job ? (
+                <div style={{color:"var(--muted)"}}>Нет вакансии для сравнения</div>
+              ) : (
+                <>
+                  <div style={{display:"flex", alignItems:"center", gap:12, marginTop:6}}>
+                    <div style={{fontSize:28, fontWeight:800}}>{score}%</div>
+                    <div style={{height:10, background:"var(--line)", borderRadius:999, overflow:"hidden", flex:1}}>
+                      <div style={{height:10, width:`${score}%`, background:"#60a5fa"}}/>
+                    </div>
+                  </div>
+
+                  <div style={{marginTop:10, color:"var(--muted)", fontSize:13}}>
+                    Вакансия: <b>{job.title}</b> • {job.city} • {job.exp} • {job.format}
+                  </div>
+
+                  <div style={{marginTop:12}}>
+                    <div style={{fontWeight:700, marginBottom:6}}>
+                      {score < 100 ? `Почему не 100% (${100 - score}%):` : "Полное соответствие"}
+                    </div>
+                    {score < 100 ? (
+                      <ul style={{margin:0, paddingLeft:18}}>
+                        {whyText.split(";").map((t,i)=> t.trim() && <li key={i} style={{marginBottom:6}}>{t.trim().replace(/\.$/,"")}</li>)}
+                      </ul>
+                    ) : null}
+                  </div>
+
+                  <div className="actions" style={{marginTop:12}}>
+                    <button className="btn btn-outline" onClick={saveSnapshot}>Сохранить в отчёты</button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* блок «Образование» слева внизу (как было) */}
             <div className="card col-6">
               <h4 className="title" style={{marginBottom:8}}>Образование</h4>
               <ul style={{margin:0, paddingLeft:18}}>
@@ -1538,7 +1683,14 @@ export default function Page() {
         onClose={() => { setModalOpen(false); setCand(null); }}
       />
       <AuthModal open={authOpen} onClose={()=>setAuthOpen(false)} onAuth={(u)=>{ setUser(u); if(u.role==="applicant") setView("jobs"); }} />
-      <CandidatePreview open={candOpen} onClose={()=>setCandOpen(false)} candidate={cand} />
+      <CandidatePreview
+  open={candOpen}
+  onClose={()=>setCandOpen(false)}
+  candidate={cand}
+  jobs={jobs}
+  defaultJob={jobs[0]}
+/>
+
       <AddCandidateModal
         open={addOpen}
         onClose={()=>setAddOpen(false)}
