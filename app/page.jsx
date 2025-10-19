@@ -1031,6 +1031,268 @@ function EmployerTable() {
     </div>
   );
 }
+/* ========= ПРО-СВОДКА / ОЦЕНКА АНАЛИЗА ДЛЯ РАБОТОДАТЕЛЯ ========= */
+function EmployerAnalytics() {
+  const [rows, setRows] = useState([]);
+  const [jobFilter, setJobFilter] = useState("ALL");
+  const [from, setFrom] = useState(""); // YYYY-MM-DD
+  const [to, setTo] = useState("");
+
+  // ====== IO ======
+  const load = () => {
+    const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
+      .map(r => ({
+        ...r,
+        score: Number(r.score) || 0,
+        dateObj: r.date ? new Date(r.date) : null,
+      }));
+    setRows(data);
+  };
+  useEffect(() => { load(); }, []);
+
+  // ====== helpers ======
+  const fmtDate = (d) => d ? new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10) : "";
+  const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+  const uniq = (arr) => [...new Set(arr)];
+
+  const byFilters = useMemo(() => {
+    return rows.filter(r => {
+      if (jobFilter !== "ALL" && (r.jobTitle || "—") !== jobFilter) return false;
+      if (from) {
+        const f = new Date(from+"T00:00:00");
+        if (r.dateObj && r.dateObj < f) return false;
+      }
+      if (to) {
+        const t = new Date(to+"T23:59:59");
+        if (r.dateObj && r.dateObj > t) return false;
+      }
+      return true;
+    });
+  }, [rows, jobFilter, from, to]);
+
+  // пусто?
+  const empty = byFilters.length === 0;
+
+  // ====== метрики ======
+  const total = byFilters.length;
+  const scores = byFilters.map(r => r.score).sort((a,b)=>a-b);
+  const avg = total ? Math.round(scores.reduce((a,b)=>a+b,0)/total) : 0;
+  const median = total ? (scores[Math.floor((total-1)/2)] + scores[Math.ceil((total-1)/2)]) / 2 : 0;
+  const p90 = total ? scores[Math.floor(0.9*(total-1))] : 0;
+  const hi = byFilters.filter(r=>r.score>=80).length;
+  const mid= byFilters.filter(r=>r.score>=60 && r.score<80).length;
+  const lo = byFilters.filter(r=>r.score<60).length;
+  const pct = (n)=> total? Math.round(n/total*100):0;
+
+  // Топ вакансий / городов
+  const counter = (getKey)=> {
+    const m=new Map();
+    byFilters.forEach(r=>{
+      const k=getKey(r) || "—";
+      m.set(k,(m.get(k)||0)+1);
+    });
+    return [...m.entries()].map(([key,count])=>({key,count})).sort((a,b)=>b.count-a.count);
+  };
+  const topJobs = counter(r=>r.jobTitle).slice(0,5);
+  const topCities = counter(r=>r.city).slice(0,5);
+
+  // Топ причин из gaps/why
+  const topGaps = (() => {
+    const m=new Map();
+    byFilters.forEach(r=>{
+      const raw = r.why || r.gaps || "";
+      const parts = String(raw).split(/[;•|]/).map(s=>s.trim()).filter(Boolean);
+      parts.forEach(p=>{
+        const key = p.replace(/^—\s*/,"");
+        if (!key) return;
+        m.set(key, (m.get(key)||0)+1);
+      });
+    });
+    return [...m.entries()].map(([text,count])=>({text,count})).sort((a,b)=>b.count-a.count).slice(0,6);
+  })();
+
+  // Тренд по дням (YYYY-MM-DD -> count / avg score)
+  const byDay = (() => {
+    const m = new Map();
+    byFilters.forEach(r=>{
+      const k = r.dateObj ? fmtDate(r.dateObj) : "—";
+      const v = m.get(k) || {count:0,sum:0};
+      v.count += 1; v.sum += r.score; m.set(k,v);
+    });
+    const arr = [...m.entries()]
+      .filter(([k])=>k!=="—")
+      .map(([day,{count,sum}])=>({day, count, avg: Math.round(sum/count)}))
+      .sort((a,b)=> a.day.localeCompare(b.day));
+    return arr;
+  })();
+
+  // для селектора вакансий
+  const jobOptions = useMemo(()=>{
+    const all = uniq(rows.map(r=>r.jobTitle || "—"));
+    return ["ALL", ...all];
+  }, [rows]);
+
+  // экспорт CSV
+  const exportCSV = () => {
+    const toCSV = (v)=> `"${String(v??"").replace(/"/g,'""')}"`;
+    const header = ["Имя","Email","Вакансия","Город","Опыт","Формат","Релевантность","Комментарий","Дата"];
+    const lines = [header.join(",")].concat(
+      byFilters.map(r=>[
+        r.name, r.email||"", r.jobTitle||"", r.city||"", r.exp||"", r.format||"",
+        `${r.score}%`, (r.why||r.gaps||"").replace(/\n/g," "), r.date
+      ].map(toCSV).join(","))
+    );
+    const blob = new Blob([lines.join("\n")], {type: "text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "smartbot_report.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ====== мини-график (SVG sparkline) по среднему скору ======
+  const Sparkline = ({data, height=40, width=280, pad=6}) => {
+    if (!data.length) return <svg width={width} height={height} />;
+    const xs = data.map((_,i)=>i);
+    const ys = data.map(d=>d.avg);
+    const minY = Math.min(...ys, 0); // 0..100
+    const maxY = Math.max(...ys, 100);
+    const dx = (width - pad*2) / (data.length-1 || 1);
+    const scaleY = (v)=> {
+      const t = (v - minY) / (maxY - minY || 1);
+      return clamp(height - pad - t*(height-pad*2), pad, height-pad);
+    };
+    const scaleX = (i)=> pad + i*dx;
+    const d = xs.map((i)=> `${i===0 ? "M":"L"} ${scaleX(i)} ${scaleY(ys[i])}`).join(" ");
+    // заливка под линией
+    const fillD = `${d} L ${scaleX(xs[xs.length-1])} ${height-pad} L ${scaleX(0)} ${height-pad} Z`;
+    return (
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Тренд средней релевантности">
+        <path d={fillD} fill="rgba(37,99,235,.12)"></path>
+        <path d={d} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"></path>
+      </svg>
+    );
+  };
+
+  return (
+    <div className="card" style={{marginBottom:16}}>
+      {/* Header */}
+      <div style={{display:"flex", gap:12, justifyContent:"space-between", alignItems:"center", marginBottom:8, flexWrap:"wrap"}}>
+        <h3 className="title" style={{margin:0}}>Оценка анализа</h3>
+        <div style={{display:"flex", gap:8, alignItems:"center", flexWrap:"wrap"}}>
+          <select
+            value={jobFilter}
+            onChange={(e)=>setJobFilter(e.target.value)}
+            style={{padding:"8px 10px", border:"1px solid var(--line)", borderRadius:10, background:"transparent", color:"var(--text)"}}
+            title="Фильтр по вакансии"
+          >
+            {jobOptions.map(opt=>(
+              <option key={opt} value={opt}>{opt==="ALL"?"Все вакансии":opt}</option>
+            ))}
+          </select>
+          <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)}
+                 title="C даты" style={{padding:"8px 10px", border:"1px solid var(--line)", borderRadius:10, background:"transparent", color:"var(--text)"}}/>
+          <input type="date" value={to} onChange={(e)=>setTo(e.target.value)}
+                 title="По дату" style={{padding:"8px 10px", border:"1px solid var(--line)", borderRadius:10, background:"transparent", color:"var(--text)"}}/>
+          <button className="btn btn-outline" onClick={()=>{ setFrom(""); setTo(""); setJobFilter("ALL"); }}>Сброс</button>
+          <button className="btn btn-outline" onClick={load}>Обновить</button>
+          <button className="btn btn-primary" onClick={exportCSV}>Экспорт CSV</button>
+        </div>
+      </div>
+
+      {/* KPI */}
+      <div className="grid" style={{gap:12}}>
+        <div className="card col-3" style={{padding:12}}>
+          <div className="muted" style={{color:"var(--muted)", fontSize:12}}>Всего оценок</div>
+          <div style={{fontSize:26, fontWeight:800}}>{total}</div>
+        </div>
+        <div className="card col-3" style={{padding:12}}>
+          <div className="muted" style={{color:"var(--muted)", fontSize:12}}>Средняя релевантность</div>
+          <div style={{display:"flex", alignItems:"center", gap:10}}>
+            <div style={{fontSize:26, fontWeight:800}}>{avg}%</div>
+            <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", flex:1}}>
+              <div style={{height:8, width:`${avg}%`, background:"#60a5fa"}}/>
+            </div>
+          </div>
+          <div style={{fontSize:12, color:"var(--muted)", marginTop:6}}>Медиана: {Math.round(median)}% • p90: {Math.round(p90)}%</div>
+        </div>
+        <div className="card col-3" style={{padding:12}}>
+          <div className="muted" style={{color:"var(--muted)", fontSize:12}}>Распределение</div>
+          <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginTop:6}}>
+            <div><div style={{fontSize:12, color:"var(--muted)"}}>Высокая (≥80)</div><div style={{fontWeight:700}}>{hi} • {pct(hi)}%</div></div>
+            <div><div style={{fontSize:12, color:"var(--muted)"}}>Средняя (60–79)</div><div style={{fontWeight:700}}>{mid} • {pct(mid)}%</div></div>
+            <div><div style={{fontSize:12, color:"var(--muted)"}}>Низкая (&lt;60)</div><div style={{fontWeight:700}}>{lo} • {pct(lo)}%</div></div>
+          </div>
+        </div>
+        <div className="card col-3" style={{padding:12}}>
+          <div className="muted" style={{color:"var(--muted)", fontSize:12, marginBottom:4}}>Тренд (средний % по дням)</div>
+          <Sparkline data={byDay} />
+          <div style={{fontSize:12, color:"var(--muted)", marginTop:4}}>
+            {byDay.length ? `${byDay[0].day} → ${byDay[byDay.length-1].day}` : "Нет данных"}
+          </div>
+        </div>
+      </div>
+
+      {/* Топ-списки */}
+      <div className="grid" style={{gap:12, marginTop:12}}>
+        <div className="card col-6" style={{padding:12}}>
+          <div className="title" style={{marginBottom:8}}>Топ вакансии по числу откликов</div>
+          {!topJobs.length ? (
+            <div style={{color:"var(--muted)", fontSize:14}}>Пока нет данных</div>
+          ) : (
+            <div style={{display:"grid", gap:8}}>
+              {topJobs.map((j,i)=>(
+                <div key={i} style={{display:"flex", alignItems:"center", gap:10}}>
+                  <div style={{minWidth:22, textAlign:"right", fontWeight:700}}>{i+1}.</div>
+                  <div style={{flex:1}}>{j.key}</div>
+                  <div className="pill">{j.count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card col-6" style={{padding:12}}>
+          <div className="title" style={{marginBottom:8}}>Топ города</div>
+          {!topCities.length ? (
+            <div style={{color:"var(--muted)", fontSize:14}}>Пока нет данных</div>
+          ) : (
+            <div style={{display:"grid", gap:8}}>
+              {topCities.map((j,i)=>(
+                <div key={i} style={{display:"flex", alignItems:"center", gap:10}}>
+                  <div style={{minWidth:22, textAlign:"right", fontWeight:700}}>{i+1}.</div>
+                  <div style={{flex:1}}>{j.key}</div>
+                  <div className="pill">{j.count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Топ причин из gaps */}
+      <div className="card" style={{padding:12, marginTop:12}}>
+        <div className="title" style={{marginBottom:8}}>Частые причины несоответствий</div>
+        {!topGaps.length ? (
+          <div style={{color:"var(--muted)", fontSize:14}}>Нет комментариев/причин</div>
+        ) : (
+          <div style={{display:"grid", gap:8}}>
+            {topGaps.map((g,i)=>(
+              <div key={i} style={{display:"grid", gridTemplateColumns:"1fr auto", gap:10, alignItems:"center"}}>
+                <div style={{display:"flex", alignItems:"center", gap:8}}>
+                  <div style={{width:10, height:10, borderRadius:999, background:"#60a5fa"}}/>
+                  <div>{g.text}</div>
+                </div>
+                <div className="pill">{g.count}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 
 /* ========= СТРАНИЦА ========= */
 export default function Page() {
@@ -1199,6 +1461,7 @@ export default function Page() {
 
             {view === "employer" && canSeeEmployer && (
               <section>
+                <EmployerAnalytics />
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h3 className="title" style={{ marginBottom: 8 }}>Отклики SmartBot (лучшие сверху)</h3>
                   <p className="muted" style={{ color: "var(--muted)", margin: 0 }}>Отсюда можно анализировать релевантность.</p>
