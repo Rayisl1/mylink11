@@ -884,7 +884,68 @@ function EmployerTable() {
     Сформировано: ${new Date().toLocaleString()}
   </div>
   <table>
-    <thead>
+  {selectedAnalysis && (
+  <div
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }}
+    onClick={() => setSelectedAnalysis(null)}
+  >
+    <div
+      style={{
+        background: "white",
+        borderRadius: 12,
+        padding: 24,
+        width: "90%",
+        maxWidth: 600,
+        color: "black",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <h2>Анализ кандидата</h2>
+      <p><b>Имя:</b> {selectedAnalysis.name}</p>
+      <p><b>Email:</b> {selectedAnalysis.email || "-"}</p>
+      <p><b>Город:</b> {selectedAnalysis.city || "-"}</p>
+      <p><b>Опыт:</b> {selectedAnalysis.exp || "-"}</p>
+      <p><b>Формат:</b> {selectedAnalysis.format || "-"}</p>
+      <p><b>Оценка релевантности:</b> {selectedAnalysis.score || 0}%</p>
+
+      {selectedAnalysis.why ? (
+        <div style={{ marginTop: 12 }}>
+          <b>Почему не 100%:</b>
+          <p style={{ whiteSpace: "pre-line", marginTop: 4 }}>
+            {selectedAnalysis.why}
+          </p>
+        </div>
+      ) : (
+        <p style={{ color: "gray" }}>Без комментария SmartBot</p>
+      )}
+
+      <button
+        onClick={() => setSelectedAnalysis(null)}
+        style={{
+          marginTop: 20,
+          background: "#0070f3",
+          color: "white",
+          border: "none",
+          borderRadius: 8,
+          padding: "8px 16px",
+          cursor: "pointer",
+        }}
+      >
+        Закрыть
+      </button>
+    </div>
+  </div>
+)}
+  
+  <thead>
   <tr>
     <th>Имя</th>
     <th>Email</th>
@@ -922,6 +983,7 @@ function EmployerTable() {
     w.document.write(html);
     w.document.close();
   };
+const [selectedAnalysis, setSelectedAnalysis] = useState(null);
 
   return (
     <div className="card">
