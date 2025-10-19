@@ -1063,183 +1063,17 @@ const done = data.next_action === "finish" || data.done === true;
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
 /* ========= ТАБЛИЦА ОТКЛИКОВ (с кнопкой «Показать анализ») ========= */
-/* ========= МОДАЛКА «ПОКАЗАТЬ АНАЛИЗ» (как AddCandidateModal) ========= */
-function EmployerAnalysisModal({ open, onClose, row, jobs = [], candidates = [] }) {
-  if (!open || !row) return null;
-
-  // --- helpers для авто-объяснений ---
-  const parseYears = (t) => {
-    if (!t) return 0;
-    const m = String(t).match(/(\d+(\.\d+)?)/);
-    return m ? Number(m[1]) : 0;
-  };
-  const inferRequiredYears = (jobExp) => {
-    if (!jobExp) return 0;
-    const m = String(jobExp).match(/(\d+)/);
-    if (m) return Number(m[1]);
-    if (/senior/i.test(jobExp)) return 5;
-    if (/middle\+?/i.test(jobExp)) return 3;
-    if (/middle/i.test(jobExp)) return 2;
-    if (/junior/i.test(jobExp)) return 0.5;
-    return 0;
-  };
-  const autoWhy = (cand, jobRef) => {
-    const gaps = [];
-    if (cand?.city && jobRef?.city && cand.city.toLowerCase() !== String(jobRef.city).toLowerCase()) {
-      gaps.push(`Город отличается (${cand.city} ≠ ${jobRef.city})`);
-    }
-    const candYears = parseYears(cand?.experience);
-    const need = inferRequiredYears(jobRef?.exp);
-    if (need > 0 && candYears < need) {
-      gaps.push(`Опыт ниже требования (${candYears} < ${need} лет)`);
-    }
-    const jt = (jobRef?.title || "").toLowerCase();
-    const pf = (cand?.profession || "").toLowerCase();
-    if (jt && pf && !(pf.includes(jt) || jt.includes(pf))) {
-      gaps.push(`Профиль не совпадает с вакансией («${cand?.profession||'—'}» vs «${jobRef?.title||'—'}» )`);
-    }
-    return gaps.length ? gaps.join("; ") + "." : "Незначительные несоответствия по профилю/ключевым словам.";
-  };
-
-  // найти сущности по row
-  const jobRef =
-    jobs.find(j => String(j.title).toLowerCase() === String(row.jobTitle||"").toLowerCase()) ||
-    jobs[0] || null;
-
-  const candRef =
-    candidates.find(c => (c.email||"").toLowerCase() === (row.email||"").toLowerCase()) ||
-    candidates.find(c => (c.name||"").toLowerCase() === (row.name||"").toLowerCase()) ||
-    { name: row.name, email: row.email, city: row.city, experience: row.exp, profession: "" };
-
-  const score = Number(row.score) || 0;
-  const delta = Math.max(0, 100 - score);
-
-  // 1) причины из записи; 2) если нет — авто-генерация
-  const reasonRaw = (row.why || row.gaps || "").trim() || `Почему не 100%: ${autoWhy(candRef, jobRef)}`;
-  const reasonLines = reasonRaw.replace(/^Почему не 100%:\s*/i, "")
-    .split(/[;•|]/).map(s=>s.trim()).filter(Boolean);
-
-  return (
-    <div
-      className="modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="modal-shell" role="document" style={{width:"min(880px,96vw)"}}>
-        <div className="modal-head">
-          <div className="modal-title">Анализ соответствия</div>
-          <button className="icon-close" aria-label="Закрыть" onClick={onClose}>×</button>
-        </div>
-
-        <div className="modal-body">
-          <div className="card" style={{marginBottom:12}}>
-            <div className="title" style={{marginBottom:6}}>
-              {row.name} • <span style={{color:"var(--muted)"}}>{row.email || "—"}</span>
-            </div>
-            <div className="meta">
-              <span className="pill">{row.jobTitle || "—"}</span>
-              {row.city && <span className="pill">{row.city}</span>}
-              {row.exp && <span className="pill">Опыт: {row.exp}</span>}
-              {row.format && <span className="pill">{row.format}</span>}
-            </div>
-          </div>
-
-          <div className="grid" style={{gap:12}}>
-            <div className="card col-6">
-              <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:10}}>
-                <div style={{fontSize:32, fontWeight:800}}>{score}%</div>
-                <div style={{height:12, background:"var(--line)", borderRadius:999, overflow:"hidden", flex:1}}>
-                  <div style={{
-                    height:12,
-                    width:`${Math.max(0,Math.min(100,score))}%`,
-                    background: score>=80 ? "#10b981" : score>=60 ? "#f59e0b" : "#ef4444"
-                  }}/>
-                </div>
-              </div>
-              <div style={{fontSize:13, color:"var(--muted)"}}>
-                Вакансия: <b>{jobRef?.title || row.jobTitle || "—"}</b><br/>
-                Город: {jobRef?.city || "—"} • Требуемый опыт: {jobRef?.exp || "—"} • Формат: {jobRef?.format || "—"}
-              </div>
-              <div style={{fontSize:12, color:"var(--muted)", marginTop:8}}>
-                Дата оценки: {row.date ? new Date(row.date).toLocaleString() : "—"}
-              </div>
-            </div>
-
-            <div className="card col-6">
-              <div className="title" style={{marginBottom:6}}>
-                {delta>0 ? `Почему не подходит ${delta}%` : "Полное соответствие (100%)"}
-              </div>
-              {delta === 0 ? (
-                <div style={{color:"var(--muted)"}}>Несоответствий не найдено.</div>
-              ) : (
-                <ul style={{margin:0, paddingLeft:18}}>
-                  {reasonLines.map((t,i)=>(
-                    <li key={i} style={{marginBottom:6}}>{t.replace(/\.$/,"")}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* стили как в AddCandidateModal */}
-      <style jsx global>{`
-        .modal-backdrop{
-          position:fixed; inset:0; z-index:1000;
-          background:rgba(2,8,23,.55); backdrop-filter:blur(6px);
-          display:flex; align-items:center; justify-content:center;
-          padding:24px; animation:fadeIn .15s ease-out;
-        }
-        .modal-shell{
-          background:var(--card);
-          border:1px solid var(--line);
-          border-radius:20px;
-          box-shadow:0 24px 80px rgba(2,8,23,.28);
-          overflow:hidden; transform:scale(.98);
-          animation:popIn .15s ease-out forwards;
-          max-height:90vh;
-        }
-        .modal-head{
-          display:flex; align-items:center; justify-content:space-between;
-          padding:14px 16px; background:#f1f5f9; border-bottom:1px solid var(--line);
-        }
-        [data-theme="dark"] .modal-head{ background:#0b1424 }
-        .modal-title{ font-weight:700 }
-        .icon-close{ border:none; background:transparent; font-size:22px; line-height:1; color:#94a3b8; cursor:pointer }
-        .modal-body{ padding:16px; overflow:auto; max-height:calc(90vh - 56px) }
-        @keyframes fadeIn{ from{opacity:0} to{opacity:1} }
-        @keyframes popIn{ to{ transform:scale(1) } }
-      `}</style>
-    </div>
-  );
-}
-
-/* ========= ЕДИНАЯ ТАБЛИЦА РАБОТОДАТЕЛЯ =========
-   Принимает:
-   - rows: массив записей (опционально). Если не передать — возьмёт из localStorage.
-   - jobs, candidates: для корректной генерации причин в модалке.
-   - onRefresh: колбэк, если ты сам управляешь данными.
-================================================= */
-function EmployerTable({ rows: rowsProp, jobs = JOBS, candidates = [], onRefresh }) {
+function EmployerTable() {
   const [rows, setRows] = useState([]);
-  const [openRow, setOpenRow] = useState(null);
+  const [openRow, setOpenRow] = useState(null); // ← для модалки анализа
 
-  // загрузка: либо из пропсов, либо из localStorage
-  const load = useCallback(() => {
-    if (Array.isArray(rowsProp)) {
-      const data = rowsProp.slice().sort((a,b)=>Number(b.score||0)-Number(a.score||0));
-      setRows(data);
-    } else {
-      const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
-        .slice()
-        .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
-      setRows(data);
-    }
-  }, [rowsProp]);
-
-  useEffect(()=>{ load(); }, [load]);
+  const load = () => {
+    const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
+      .slice()
+      .sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+    setRows(data);
+  };
+  useEffect(()=>{ load(); }, []);
 
   const tone = (s)=> (s>=80?"b-good":s>=60?"b-warn":"b-bad");
 
@@ -1249,16 +1083,74 @@ function EmployerTable({ rows: rowsProp, jobs = JOBS, candidates = [], onRefresh
     setRows([]);
   };
 
-  const handleRefresh = () => {
-    if (onRefresh) onRefresh();
-    load();
+  const exportPDF = () => {
+    const html = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Отчёт SmartBot</title>
+<style>
+  body{font-family:Arial, sans-serif; padding:24px; color:#111;}
+  h1{margin:0 0 16px 0; font-size:20px}
+  table{border-collapse:collapse; width:100%}
+  th, td{border:1px solid #ddd; padding:8px; font-size:12px; text-align:left}
+  th{background:#f3f4f6}
+  .right{text-align:right}
+</style>
+</head>
+<body>
+  <h1>Отчёт SmartBot — релевантность кандидатов</h1>
+  <div style="font-size:12px;margin-bottom:10px;color:#555">
+    Сформировано: ${new Date().toLocaleString()}
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Имя</th>
+        <th>Email</th>
+        <th>Вакансия</th>
+        <th>Релевантность</th>
+        <th>Город</th>
+        <th>Опыт</th>
+        <th>Формат</th>
+        <th>Комментарий</th>
+        <th>Дата</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows.map(r=>`
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.email||"-")}</td>
+          <td>${esc(r.jobTitle||"")}</td>
+          <td class="right">${Number(r.score)||0}%</td>
+          <td>${esc(r.city||"-")}</td>
+          <td>${esc(r.exp||"-")}</td>
+          <td>${esc(r.format||"-")}</td>
+          <td style="max-width:320px; white-space:normal;">
+            ${r.why ? esc(r.why) : (Number(r.score) >= 80 ? "— Причины не указаны" : "—")}
+          </td>
+          <td>${r.date ? new Date(r.date).toLocaleString() : "-"}</td>
+        </tr>
+      `).join("")}
+    </tbody>
+  </table>
+  <script>window.print();</script>
+</body>
+</html>`;
+    const w = window.open("", "_blank");
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   };
 
   return (
     <div className="card">
       <div style={{display:"flex", gap:8, marginBottom:12, flexWrap:"wrap"}}>
-        <button className="btn btn-outline" onClick={handleRefresh}>Обновить</button>
-        {!rowsProp && <button className="btn btn-outline" onClick={clearAll}>Очистить</button>}
+        <button className="btn btn-outline" onClick={load}>Обновить</button>
+        <button className="btn btn-outline" onClick={clearAll}>Очистить</button>
+        <button className="btn btn-primary" onClick={exportPDF}>Скачать PDF</button>
       </div>
 
       <div style={{ overflow: "auto" }}>
@@ -1271,7 +1163,7 @@ function EmployerTable({ rows: rowsProp, jobs = JOBS, candidates = [], onRefresh
               <th>Релевантность</th>
               <th>Индикатор</th>
               <th>Дата</th>
-              <th>Действия</th>
+              <th>Действия</th> {/* ← добавили */}
             </tr>
           </thead>
           <tbody>
@@ -1315,14 +1207,78 @@ function EmployerTable({ rows: rowsProp, jobs = JOBS, candidates = [], onRefresh
         </table>
       </div>
 
-      {/* Большая модалка с объяснениями */}
+      {/* Модалка анализа */}
       <EmployerAnalysisModal
         open={!!openRow}
         onClose={()=>setOpenRow(null)}
         row={openRow}
-        jobs={jobs}
-        candidates={candidates}
       />
+    </div>
+  );
+}
+/* ========= МОДАЛКА «ПОКАЗАТЬ АНАЛИЗ» ========= */
+function EmployerAnalysisModal({ open, onClose, row }) {
+  if (!open || !row) return null;
+  const score = Number(row.score) || 0;
+  const delta = Math.max(0, 100 - score);
+
+  // Показываем сохранённые причины, если они есть.
+  // Если в записи нет r.why/r.gaps (например, старая запись), показываем аккуратное сообщение.
+  const reason = (row.why || row.gaps || "").trim();
+  const lines = reason
+    ? reason.replace(/^Почему не 100%:\s*/i, "").split(/[;•|]/).map(s => s.trim()).filter(Boolean)
+    : [];
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-shell" role="document" style={{width:"min(680px,94vw)"}}>
+        <div className="modal-head">
+          <div className="modal-title">Анализ соответствия</div>
+          <button className="icon-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="modal-body">
+          <div className="card" style={{marginBottom:12}}>
+            <div className="title" style={{marginBottom:6}}>
+              {row.name} • <span style={{color:"var(--muted)"}}>{row.email || "—"}</span>
+            </div>
+            <div className="meta">
+              <span className="pill">{row.jobTitle || "—"}</span>
+              {row.city && <span className="pill">{row.city}</span>}
+              {row.exp && <span className="pill">Опыт: {row.exp}</span>}
+              {row.format && <span className="pill">{row.format}</span>}
+            </div>
+          </div>
+
+          <div className="card">
+            <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:10}}>
+              <div style={{fontSize:28, fontWeight:800}}>{score}%</div>
+              <div style={{height:10, background:"var(--line)", borderRadius:999, overflow:"hidden", flex:1}}>
+                <div style={{height:10, width:`${Math.max(0,Math.min(100,score))}%`, background: score>=80 ? "#10b981" : score>=60 ? "#f59e0b" : "#ef4444"}}/>
+              </div>
+            </div>
+            <div style={{fontWeight:700, marginBottom:6}}>
+              {delta > 0 ? `Почему не подходит ${delta}%:` : "Полное соответствие (100%)"}
+            </div>
+
+            {delta === 0 ? (
+              <div style={{color:"var(--muted)"}}>Несоответствий не выявлено.</div>
+            ) : lines.length ? (
+              <ul style={{margin:0, paddingLeft:18}}>
+                {lines.map((t,i)=> <li key={i} style={{marginBottom:6}}>{t.replace(/\.$/,"")}</li>)}
+              </ul>
+            ) : (
+              <div style={{color:"var(--muted)"}}>
+                Комментарии к оценке не были сохранены. Оценка рассчитана автоматически.
+              </div>
+            )}
+
+            <div style={{fontSize:12, color:"var(--muted)", marginTop:10}}>
+              Дата: {row.date ? new Date(row.date).toLocaleString() : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1762,7 +1718,6 @@ export default function Page() {
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h3 className="title" style={{ marginBottom: 8 }}>Отклики SmartBot (лучшие сверху)</h3>
                   <p className="muted" style={{ color: "var(--muted)", margin: 0 }}>Отсюда можно анализировать релевантность.</p>
-                  <EmployerTable jobs={jobs} candidates={candidates} />
                 </div>
                 <EmployerTable />
               </section>
