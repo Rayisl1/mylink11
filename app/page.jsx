@@ -1062,8 +1062,10 @@ const done = data.next_action === "finish" || data.done === true;
 }
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
+/* ========= ТАБЛИЦА ОТКЛИКОВ (с кнопкой «Показать анализ») ========= */
 function EmployerTable() {
   const [rows, setRows] = useState([]);
+  const [openRow, setOpenRow] = useState(null); // ← для модалки анализа
 
   const load = () => {
     const data = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]")
@@ -1104,34 +1106,35 @@ function EmployerTable() {
   </div>
   <table>
     <thead>
-  <tr>
-    <th>Имя</th>
-    <th>Email</th>
-    <th>Вакансия</th>
-    <th>Релевантность</th>
-    <th>Индикатор</th>
-    <th>Комментарий</th> {/* ← новая */}
-    <th>Дата</th>
-  </tr>
-</thead>
+      <tr>
+        <th>Имя</th>
+        <th>Email</th>
+        <th>Вакансия</th>
+        <th>Релевантность</th>
+        <th>Город</th>
+        <th>Опыт</th>
+        <th>Формат</th>
+        <th>Комментарий</th>
+        <th>Дата</th>
+      </tr>
+    </thead>
     <tbody>
-  ${rows.map(r=>`
-    <tr>
-      <td>${esc(r.name)}</td>
-      <td>${esc(r.email||"-")}</td>
-      <td>${esc(r.jobTitle||"")}</td>
-      <td class="right">${Number(r.score)||0}%</td>
-      <td>${esc(r.city||"-")}</td>
-      <td>${esc(r.exp||"-")}</td>
-      <td>${esc(r.format||"-")}</td>
-      <td style="max-width:320px; white-space:normal;">
-        ${r.why ? esc(r.why) : (Number(r.score) >= 80 ? "— Причины не указаны" : "—")}
-      </td>
-      <td>${new Date(r.date).toLocaleString()}</td>
-    </tr>
-  `).join("")}
-</tbody>
-
+      ${rows.map(r=>`
+        <tr>
+          <td>${esc(r.name)}</td>
+          <td>${esc(r.email||"-")}</td>
+          <td>${esc(r.jobTitle||"")}</td>
+          <td class="right">${Number(r.score)||0}%</td>
+          <td>${esc(r.city||"-")}</td>
+          <td>${esc(r.exp||"-")}</td>
+          <td>${esc(r.format||"-")}</td>
+          <td style="max-width:320px; white-space:normal;">
+            ${r.why ? esc(r.why) : (Number(r.score) >= 80 ? "— Причины не указаны" : "—")}
+          </td>
+          <td>${r.date ? new Date(r.date).toLocaleString() : "-"}</td>
+        </tr>
+      `).join("")}
+    </tbody>
   </table>
   <script>window.print();</script>
 </body>
@@ -1152,30 +1155,135 @@ function EmployerTable() {
 
       <div style={{ overflow: "auto" }}>
         <table className="table">
-          <thead><tr><th>Имя</th><th>Email</th><th>Вакансия</th><th>Релевантность</th><th>Индикатор</th><th>Дата</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Имя</th>
+              <th>Email</th>
+              <th>Вакансия</th>
+              <th>Релевантность</th>
+              <th>Индикатор</th>
+              <th>Дата</th>
+              <th>Действия</th> {/* ← добавили */}
+            </tr>
+          </thead>
           <tbody>
             {!rows.length ? (
-              <tr><td colSpan={6} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
+              <tr><td colSpan={7} style={{textAlign:"center", color:"var(--muted)", padding:18}}>Пока нет данных</td></tr>
             ) : rows.map((r,i)=>(
               <tr key={i}>
                 <td>{esc(r.name)}</td>
                 <td>{esc(r.email||"-")}</td>
                 <td>{esc(r.jobTitle||"")}</td>
-                <td><span className={clsx("badge", tone(Number(r.score)||0))}>{Number(r.score)||0}%</span></td>
+                <td>
+                  <span className={clsx("badge", tone(Number(r.score)||0))}>
+                    {Number(r.score)||0}%
+                  </span>
+                </td>
                 <td>
                   <div style={{height:8, background:"var(--line)", borderRadius:999, overflow:"hidden", width:140}}>
-                    <div style={{height:8, width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`, background:"#60a5fa"}}/>
+                    <div style={{
+                      height:8,
+                      width:`${Math.max(0,Math.min(100,Number(r.score)||0))}%`,
+                      background: (Number(r.score)||0) >= 80 ? "#10b981" : (Number(r.score)||0) >= 60 ? "#f59e0b" : "#ef4444"
+                    }}/>
                   </div>
                 </td>
-                <td style={{fontSize:12, color:"var(--muted)"}}>{new Date(r.date).toLocaleString()}</td>
+                <td style={{fontSize:12, color:"var(--muted)"}}>
+                  {r.date ? new Date(r.date).toLocaleString() : "-"}
+                </td>
+                <td>
+                  <button
+                    className="btn btn-outline"
+                    onClick={()=> setOpenRow(r)}
+                    title="Показать анализ причин"
+                    style={{whiteSpace:"nowrap"}}
+                  >
+                    Показать анализ
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {/* Модалка анализа */}
+      <EmployerAnalysisModal
+        open={!!openRow}
+        onClose={()=>setOpenRow(null)}
+        row={openRow}
+      />
     </div>
   );
 }
+/* ========= МОДАЛКА «ПОКАЗАТЬ АНАЛИЗ» ========= */
+function EmployerAnalysisModal({ open, onClose, row }) {
+  if (!open || !row) return null;
+  const score = Number(row.score) || 0;
+  const delta = Math.max(0, 100 - score);
+
+  // Показываем сохранённые причины, если они есть.
+  // Если в записи нет r.why/r.gaps (например, старая запись), показываем аккуратное сообщение.
+  const reason = (row.why || row.gaps || "").trim();
+  const lines = reason
+    ? reason.replace(/^Почему не 100%:\s*/i, "").split(/[;•|]/).map(s => s.trim()).filter(Boolean)
+    : [];
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" onMouseDown={(e)=>{ if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-shell" role="document" style={{width:"min(680px,94vw)"}}>
+        <div className="modal-head">
+          <div className="modal-title">Анализ соответствия</div>
+          <button className="icon-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="modal-body">
+          <div className="card" style={{marginBottom:12}}>
+            <div className="title" style={{marginBottom:6}}>
+              {row.name} • <span style={{color:"var(--muted)"}}>{row.email || "—"}</span>
+            </div>
+            <div className="meta">
+              <span className="pill">{row.jobTitle || "—"}</span>
+              {row.city && <span className="pill">{row.city}</span>}
+              {row.exp && <span className="pill">Опыт: {row.exp}</span>}
+              {row.format && <span className="pill">{row.format}</span>}
+            </div>
+          </div>
+
+          <div className="card">
+            <div style={{display:"flex", alignItems:"center", gap:12, marginBottom:10}}>
+              <div style={{fontSize:28, fontWeight:800}}>{score}%</div>
+              <div style={{height:10, background:"var(--line)", borderRadius:999, overflow:"hidden", flex:1}}>
+                <div style={{height:10, width:`${Math.max(0,Math.min(100,score))}%`, background: score>=80 ? "#10b981" : score>=60 ? "#f59e0b" : "#ef4444"}}/>
+              </div>
+            </div>
+            <div style={{fontWeight:700, marginBottom:6}}>
+              {delta > 0 ? `Почему не подходит ${delta}%:` : "Полное соответствие (100%)"}
+            </div>
+
+            {delta === 0 ? (
+              <div style={{color:"var(--muted)"}}>Несоответствий не выявлено.</div>
+            ) : lines.length ? (
+              <ul style={{margin:0, paddingLeft:18}}>
+                {lines.map((t,i)=> <li key={i} style={{marginBottom:6}}>{t.replace(/\.$/,"")}</li>)}
+              </ul>
+            ) : (
+              <div style={{color:"var(--muted)"}}>
+                Комментарии к оценке не были сохранены. Оценка рассчитана автоматически.
+              </div>
+            )}
+
+            <div style={{fontSize:12, color:"var(--muted)", marginTop:10}}>
+              Дата: {row.date ? new Date(row.date).toLocaleString() : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /* ========= ПРО-СВОДКА / ОЦЕНКА АНАЛИЗА ДЛЯ РАБОТОДАТЕЛЯ ========= */
 function EmployerAnalytics() {
   const [rows, setRows] = useState([]);
