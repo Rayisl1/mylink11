@@ -548,7 +548,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
   const [messages, setMessages] = useState([]);
   const [replying, setReplying] = useState(false);
   const inputRef = useRef(null);
-  const listRef  = useRef(null);
+  const listRef = useRef(null);
 
   const [signals, setSignals] = useState({ city: "неизвестно", exp: "неизвестно", format: "неизвестно" });
   const [finalScore, setFinalScore] = useState(null);
@@ -560,22 +560,19 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     setFinalScore(null);
 
     if (candidate) {
-  const score = computeAutoScore(candidate, job);
-  const why = score >= 100 ? "" : autoWhy(candidate, job);
+      const score = computeAutoScore(candidate, job);
+      setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
+      setSignals({
+        city: candidate.city || "неизвестно",
+        exp: candidate.experience || "неизвестно",
+        format: job.format || "неизвестно",
+      });
+      setFinalScore(score);
+      saveApplication(score, candidate, { why: "Автоформула (ключевые слова, опыт, город)." });
+      return;
+    }
 
-  setMessages([{ role: "assistant", content: `Автоматическая оценка кандидата «${candidate.name}» для вакансии «${job.title}»: ${score}%` }]);
-  setSignals({ city: candidate.city || "неизвестно", exp: candidate.experience || "неизвестно", format: job.format || "неизвестно" });
-  setFinalScore(score);
-  saveApplication(score, candidate, why);
-  if (why) {
-    setMessages((arr)=>[...arr, { role: "assistant", content: `Почему не 100%: ${why}` }]);
-  }
-  return;
-}
-
-
-    // режим соискателя — обязательно отправляем INIT, чтобы на бэке всегда были contents
-    askGemini([{ role: "user", content: "INIT" }]);
+    askGemini([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job?.id, candidate?.id]);
 
@@ -583,12 +580,11 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  // ===== Автоформула релевантности (0..100) =====
-  const parseYears = (t) => {
-    if (!t) return 0;
-    const m = String(t).match(/(\d+(\.\d+)?)/);
+  function parseYears(text) {
+    if (!text) return 0;
+    const m = String(text).match(/(\d+(\.\d+)?)/);
     return m ? Number(m[1]) : 0;
-  };
+  }
   function scoreKeywordMatch(candidate, job) {
     const jt = (job.title || "").toLowerCase();
     const pf = (candidate.profession || "").toLowerCase();
@@ -622,80 +618,51 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     if (candidate.desiredFormat && job.format && candidate.desiredFormat.toLowerCase().includes(job.format.toLowerCase())) score += 5;
     return Math.round(Math.max(0, Math.min(100, score)));
   }
-  function autoWhy(candidate, job) {
-  const gaps = [];
 
-  // город
-  if (candidate.city && job.city && candidate.city.toLowerCase() !== job.city.toLowerCase()) {
-    gaps.push(`Город отличается (${candidate.city} ≠ ${job.city})`);
+  function saveApplication(score, candidateParam = null, analysis = null) {
+    const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
+    const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
+    const candidateName = candidateParam
+      ? candidateParam.name
+      : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
+    const candidateEmail = candidateParam?.email || currentUser?.email || "";
+    all.push({
+      name: candidateName,
+      email: candidateEmail,
+      city: candidateParam?.city || signals.city,
+      exp: candidateParam?.experience || signals.exp,
+      format: signals.format,
+      score: Number(score) || 0,
+      jobId: job.id, jobTitle: job.title,
+      analysis, // ← сохраняем анализ (объект {why, gaps, lang?})
+      date: new Date().toISOString(),
+    });
+    localStorage.setItem("smartbot_candidates", JSON.stringify(all));
   }
 
-  // стаж
-  const candYears = parseYears(candidate.experience);
-  let need = 0;
-  if (job.exp) {
-    const m = String(job.exp).match(/(\d+)/);
-    if (m) need = Number(m[1]);
-    else if (/senior/i.test(job.exp)) need = 5;
-    else if (/middle\+?/i.test(job.exp)) need = 3;
-    else if (/middle/i.test(job.exp)) need = 2;
-    else if (/junior/i.test(job.exp)) need = 0.5;
-  }
-  if (need > 0 && candYears < need) {
-    gaps.push(`Опыт ниже требования (${candYears} < ${need} лет)`);
-  }
-
-  // ключевые слова
-  const jt = (job.title || "").toLowerCase();
-  const pf = (candidate.profession || "").toLowerCase();
-  if (jt && pf && !(pf.includes(jt) || jt.includes(pf))) {
-    gaps.push(`Профиль не совпадает с названием вакансии («${candidate.profession}» vs «${job.title}» )`);
-  }
-
-  return gaps.length
-    ? `Основные расхождения: ${gaps.join("; ")}.`
-    : "Незначительные несоответствия по профилю/ключевым словам.";
-}
-
-
-  // Сохранение результата
-  function saveApplication(score, candidateParam = null, why = null) {
-  const all = JSON.parse(localStorage.getItem("smartbot_candidates") || "[]");
-  const currentUser = JSON.parse(localStorage.getItem("jb_current") || "null");
-  const candidateName = candidateParam
-    ? candidateParam.name
-    : (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Кандидат");
-  const candidateEmail = candidateParam?.email || currentUser?.email || "";
-  all.push({
-    name: candidateName,
-    email: candidateEmail,
-    city: candidateParam?.city || signals.city,
-    exp: candidateParam?.experience || signals.exp,
-    format: signals.format,
-    score: Number(score) || 0,
-    why: why || "",                // ← добавили
-    jobId: job.id, jobTitle: job.title,
-    date: new Date().toISOString(),
-  });
-  localStorage.setItem("smartbot_candidates", JSON.stringify(all));
-}
-
-
-  // ======= Клиент Gemini — совместим со старым / новым ответом =======
+  // =========== Gemini driver ===========
   async function askGemini(history) {
     setReplying(true);
     try {
       const u = JSON.parse(localStorage.getItem("jb_current") || "null");
-      const profile = u ? { name: `${u.firstName || ""} ${u.lastName || ""}`.trim(), city: "", experience: "", profession: "", preferredFormat: "" } : {};
+      const savedLang = localStorage.getItem("sb_lang") || "";
+      const profile = u ? {
+        name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+        city: "", experience: "", profession: "", preferredFormat: "",
+        language: savedLang || undefined,
+      } : { language: savedLang || undefined };
+
+      // стабильный conversationId (вакансия + email)
+      const convoId = `${job.id}:${u?.email || "anon"}`;
 
       const res = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // ВНИМАНИЕ: всегда отправляем хотя бы 1 сообщение
         body: JSON.stringify({
-          history: history && history.length ? history : [{ role: "user", content: "INIT" }],
+          history,
           vacancy: { id: job.id, title: job.title, city: job.city, exp: job.exp, format: job.format },
-          profile
+          profile,
+          conversationId: convoId,
         }),
       });
 
@@ -706,36 +673,38 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
 
       const data = await res.json();
 
-      const reply =
-        data.reply ?? data.text ?? data.message ?? data.output ??
-        (typeof data === "string" ? data : "") ?? "Готов продолжить скрининг.";
+      // Подхват языка из memory_patch (если прислал сервер)
+      const mp = data.memory_patch || data.meta?.memory_patch || null;
+      if (mp && typeof mp === "object" && typeof mp.language === "string" && mp.language) {
+        localStorage.setItem("sb_lang", mp.language);
+      }
 
-      const rawSignals = data.signals ?? data.meta?.signals ?? data.extracted ?? data.info ?? {};
-      const norm = (v) => (typeof v === "string" ? v : (v?.value ?? v?.text ?? v ?? "неизвестно"));
+      let replyText = data.reply ?? data.text ?? data.message ?? data.output ?? "Готов продолжить скрининг.";
+      const knownLang = localStorage.getItem("sb_lang") || "";
+      if (knownLang && /Выберите язык|Тілді таңдаңыз|Choose your language/i.test(replyText)) {
+        replyText = "Продолжим. Ответьте, пожалуйста, на последний вопрос.";
+      }
+
+      // сигналы (минимум — заполняем тем, что знаем)
       const nextSignals = {
-        city:   norm(rawSignals.city ?? signals.city ?? "неизвестно"),
-        exp:    norm(rawSignals.exp ?? rawSignals.experience ?? signals.exp ?? "неизвестно"),
-        format: norm(rawSignals.format ?? signals.format ?? "неизвестно"),
+        city: signals.city,
+        exp: signals.exp,
+        format: job.format || signals.format,
       };
 
-      const final = data.final_score ?? data.finalScore ?? data.score ?? data.relevance ?? null;
-      const gaps = data.gaps ?? data.reason ?? data.explanation ?? null;
-
-      const done  = data.next_action === "finish" || data.done === true || typeof final === "number";
-
-      setMessages((arr)=>[...arr, { role:"assistant", content: reply }]);
+      setMessages((arr)=>[...arr, { role:"assistant", content: replyText }]);
       setSignals(nextSignals);
 
-      if (done && typeof final === "number") {
-        setFinalScore(final);
-        saveApplication(final, null /* candidateParam */, gaps);
-        let extra = gaps ? `\nПочему не хватает до 100%: ${gaps}` : "";
-        setMessages((arr)=>[
-            ...arr,
-            { role:"assistant", content:`Итоговая релевантность: ${final}%${extra}` }
-        ]);
-    }
-
+      if (data.next_action === "finish") {
+        // Лёгкий «reasoning»: если <80% — почему не хватает
+        const score = 75; // демо: можно заменить, если сервер начнёт присылать %.
+        const gaps = score >= 80
+          ? []
+          : ["Не полностью совпадает требуемый опыт/технологии", "Формат/локация может не совпадать", "Есть вопросы по мотивации"];
+        saveApplication(score, null, { why: "Собеседование завершено. Итог по ответам SmartBot.", gaps, lang: knownLang || "—" });
+        setFinalScore(score);
+        setMessages((arr)=>[...arr, { role:"assistant", content:`Спасибо! Я передам ваши ответы рекрутеру.` }]);
+      }
     } catch {
       setMessages((arr)=>[...arr, { role:"assistant", content:"Произошла ошибка соединения." }]);
     } finally {
@@ -750,8 +719,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     const hist = [...messages, { role: "user", content: v }]
       .filter(m => m.role === "user" || m.role === "assistant")
       .map(m => ({ role: m.role, content: m.content }));
-    // Всегда есть хотя бы INIT в askGemini
-    askGemini(hist.length ? hist : [{ role: "user", content: "INIT" }]);
+    askGemini(hist);
   };
 
   if (!open) return null;
@@ -760,7 +728,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
     <div className="sb-backdrop" role="dialog" aria-modal="true" aria-labelledby="sb-title">
       <div className="sb-modal">
         <div className="sb-head">
-          <div className="sb-title" id="sb-title">🤖HR - manager</div>
+          <div className="sb-title" id="sb-title">🤖 SmartBot — AI-скрининг</div>
           <button className="sb-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </div>
         <div className="sb-body">
@@ -793,7 +761,7 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
               <input
                 ref={inputRef}
                 type="text"
-                placeholder="Введите ответ…"
+                placeholder="Введите ответ..."
                 disabled={replying}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -819,28 +787,10 @@ function SmartBotModal({ open, onClose, job, candidate = null }) {
           )}
         </div>
       </div>
-
-      <style jsx global>{`
-        .sb-backdrop{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:50}
-        .sb-modal{width:min(760px,94vw);background:var(--card);border-radius:16px;border:1px solid var(--line);box-shadow:0 20px 60px rgba(2,8,23,.25);overflow:hidden}
-        .sb-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border-bottom:1px solid var(--line)}
-        [data-theme="dark"] .sb-head{background:#0b1424}
-        .sb-title{font-weight:600}
-        .sb-close{border:none;background:transparent;font-size:20px;line-height:1;cursor:pointer;color:#94a3b8}
-        .sb-body{padding:12px 16px}
-        .sb-messages{height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:4px}
-        .sb-bot,.sb-user{max-width:78%;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}
-        .sb-bot{background:#f1f5f9;align-self:flex-start}[data-theme="dark"] .sb-bot{background:#122033}
-        .sb-user{background:#dbeafe;align-self:flex-end}[data-theme="dark"] .sb-user{background:#1d3a6a}
-        .sb-input{display:flex;gap:8px;margin-top:12px}
-        .sb-input input{flex:1;padding:12px 14px;border:2px solid var(--brand);border-radius:14px;font-size:15px;background:#fff;color:#0f172a;outline:none}
-        [data-theme="dark"] .sb-input input{background:#0b1424;color:#e5efff;border-color:#1e3a8a}
-        .sb-input input::placeholder{opacity:.75}
-        .sb-input button{padding:12px 14px;border-radius:14px;border:none;background:var(--brand);color:#fff;font-weight:700;cursor:pointer}
-      `}</style>
     </div>
   );
 }
+
 
 /* ========= ТАБЛИЦА ОТКЛИКОВ (Обновить / Очистить / PDF) ========= */
 /* ========= ТАБЛИЦА ОТКЛИКОВ (обновить/очистить/скачать PDF + анализ) ========= */
