@@ -277,26 +277,31 @@ export async function POST(req) {
     }
 
     // NEW: формируем signals из актуальной памяти
-    const memNow = getMemory(conversationId);
-    const signals = {
-      city: memNow.city || "-",
-      exp:  memNow.experience || "-",
-      format: memNow.format || "-",
-    };
+const memNow = getMemory(conversationId);
+const signals = {
+  city: memNow.city || "-",
+  exp: memNow.experience || "-",
+  format: memNow.format || "-",
+};
 
-    // NEW: считаем итог, когда это уместно (или делаем best-effort)
-    const finalScore = computeAutoScoreServer({ memory: memNow, vacancy, profile });
-    const whyNot = explainGapServer({ memory: memNow, vacancy, score: finalScore });
+// Считаем итог и объяснение только если модель завершила интервью
+let finalScore = null;
+let gaps = null;
 
-    // Если модель явно говорит «finish», фронт воспримет как окончание скрининга.
-    return j(200, {
-      ok: true,
-      reply: parsed.reply,
-      next_action: parsed.next_action,
-      signals,                 // ← ждёт фронт
-      final_score: finalScore, // ← ждёт фронт
-      why_not: whyNot,         // ← ждёт фронт
-    });
+if (parsed.next_action === "finish") {
+  finalScore = computeAutoScoreServer({ memory: memNow, vacancy, profile });
+  gaps = explainGapServer({ memory: memNow, vacancy, score: finalScore });
+}
+
+return j(200, {
+  ok: true,
+  reply: parsed.reply,
+  next_action: parsed.next_action,
+  signals,
+  ...(finalScore !== null ? { final_score: finalScore } : {}),
+  ...(gaps ? { gaps } : {}),
+});
+
   } catch (e) {
     return j(500, { ok: false, error: e?.message || String(e) });
   }
